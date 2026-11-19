@@ -20,13 +20,6 @@ logger = logging.getLogger("draft")
 # Constants and Specifications
 # ---------------------------------------------------------------------------
 
-RECIPIENT_TITLES = {
-    "SHO": "The Station House Officer, [Name of Police Station]",
-    "ICC": "The Presiding Officer, Internal Complaints Committee, [Name of Workplace]",
-    "LCC": "The Chairperson, Local Complaints Committee, [District]",
-    "Protection Officer": "The Protection Officer, [District]",
-}
-
 SUBJECTS = {
     "SHO": "Complaint and request to register an FIR",
     "ICC": "Complaint regarding sexual harassment at the workplace",
@@ -35,17 +28,22 @@ SUBJECTS = {
 }
 
 FIELD_SPECS = [
+    ("letter_date", "Date of Letter", "[Date of Letter]"),
+    ("police_station", "Police Station", "[Name of Police Station]"),  # SHO only
+    ("district", "District", "[District]"),  # LCC and Protection Officer only
     ("complainant_name", "Complainant Name", "[Your Name]"),
     ("complainant_address", "Complainant Address", "[Your Address]"),
     ("complainant_phone", "Complainant Phone", "[Your Phone Number]"),
     ("respondent_name", "Respondent Name", "[Name of the Person]"),
     ("respondent_designation", "Respondent Designation", "[Their Designation or Relationship to You]"),
-    ("workplace_name", "Workplace Name", "[Name of Workplace]"),  # only for ICC/LCC
+    ("workplace_name", "Workplace Name", "[Name of Workplace]"),  # ICC/LCC only
     ("incident_date", "Date of Incident", "[Date of Incident]"),
     ("incident_time", "Time of Incident", "[Time of Incident]"),
     ("incident_place", "Place of Incident", "[Place of Incident]"),
     ("witnesses", "Witnesses", "[Names of Witnesses, if any]"),
 ]
+
+ALLOWED_DETAIL_KEYS = {k for k, _, _ in FIELD_SPECS}
 
 MONTH_NAMES = (
     "january|february|march|april|may|june|july|august|september|october|november|december"
@@ -74,10 +72,21 @@ TIME_REGEXES = [
     re.compile(r"\b(morning|evening|night)\b", re.I),
 ]
 
+PLACE_STOP_WORDS = {
+    "my", "me", "i", "he", "she", "they", "we", "when", "while", "where", "who",
+    "and", "but", "on", "at", "during", "after", "before", "then", "because", "so",
+    "was", "were", "is", "started", "tried", "asked", "said", "called", "came",
+    "made", "touched", "grabbed", "hit", "beat", "kept",
+}
+
 DESIGNATION_RE = re.compile(
     r"\b(boss|manager|supervisor|colleague|owner|employer|husband|"
     r"brother-in-law|father-in-law|mother-in-law|landlord|neighbour|neighbor|teacher|stranger)\b",
     re.I,
+)
+
+HONORIFIC_NAME_RE = re.compile(
+    r"\b(?:Mr|Mrs|Ms|Miss|Dr|Shri|Smt)\.?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?"
 )
 
 
@@ -102,22 +111,40 @@ def extract_time(text: str) -> str | None:
 
 
 def extract_place(text: str) -> str | None:
-    # Text after " at the ", " in the ", " in my ", " at my " up to a comma, period or " and ",
-    # only if it is 1 to 6 words.
+    """Extract place after ' at the | in the | at my | in my '.
+
+    Takes words one by one, stopping at the first punctuation (, . ; \n) or
+    stop word. Capped at 4 words. Returns None if no word remains.
+    """
     pattern = re.compile(r"\b(?:at|in)\s+(?:the|my)\s+", re.I)
     for m in pattern.finditer(text):
         remainder = text[m.end():]
-        delim = re.search(r"[,.\n]|\s+and\s+", remainder, re.I)
-        candidate = remainder[:delim.start()] if delim else remainder
-        candidate = candidate.strip(" \t\r\n,.;:\"'")
-        words = candidate.split()
-        if 1 <= len(words) <= 6:
-            return candidate
+        collected = []
+        for tok in re.finditer(r"([^\s,.;\n]+)|([,.;\n])", remainder):
+            if tok.group(2):
+                break
+            word = tok.group(1).strip(" \"'()")
+            if not word:
+                continue
+            if word.lower() in PLACE_STOP_WORDS:
+                break
+            collected.append(word)
+            if len(collected) == 4:
+                break
+        if collected:
+            return " ".join(collected)
     return None
 
 
 def extract_designation(text: str) -> str | None:
     m = DESIGNATION_RE.search(text)
+    if m:
+        return m.group(0).strip()
+    return None
+
+
+def extract_respondent_name(text: str) -> str | None:
+    m = HONORIFIC_NAME_RE.search(text)
     if m:
         return m.group(0).strip()
     return None
@@ -180,6 +207,19 @@ def build_draft(req: DraftRequest, search=None, llm=None) -> DraftResult:
             f"Narrative must be between 1 and 4000 characters (got {len(narrative)})."
         )
 
+    # 5. Validate and sanitize details
+    sanitized_details: dict[str, str] = {}
+    if req.details:
+        for k, v in req.details.items():
+            if k not in ALLOWED_DETAIL_KEYS:
+                continue
+            collapsed = " ".join(str(v).split()).strip()
+            if len(collapsed) > 200:
+                raise ValueError(
+                    f"Detail value for '{k}' exceeds 200 characters (got {len(collapsed)})."
+                )
+            sanitized_details[k] = collapsed
+
     # Retrieval (when search is given)
     results = []
     if search is not None:
@@ -189,11 +229,20 @@ def build_draft(req: DraftRequest, search=None, llm=None) -> DraftResult:
         except Exception:
             results = []
 
-    # 5. Determine Recipient
+    # Recipient determination
+    chosen_by_routing = False
+    has_both_icc_and_lcc = False
+
     if req.recipient:
         recipient = req.recipient
     else:
+        chosen_by_routing = True
         forums, _ = route(narrative, results)
+        names = [f.name for f in forums]
+        has_icc = any(n.startswith("Internal Complaints Committee") for n in names)
+        has_lcc = any(n.startswith("Local Complaints Committee") for n in names)
+        has_both_icc_and_lcc = has_icc and has_lcc
+
         recipient = None
         for f in forums:
             if f.name.startswith("Internal Complaints Committee"):
@@ -231,16 +280,25 @@ def build_draft(req: DraftRequest, search=None, llm=None) -> DraftResult:
     if llm is not None:
         extracted_llm = extract_via_llm(narrative, llm)
 
-    # 2 & 3. Construct fields
-    details = req.details or {}
+    # Honorific regex for respondent_name (if not filled from details or LLM)
+    if not sanitized_details.get("respondent_name") and not extracted_llm.get("respondent_name"):
+        r_name_match = extract_respondent_name(narrative)
+        if r_name_match:
+            extracted_offline["respondent_name"] = r_name_match
+
+    # Construct fields
     fields = []
     fields_by_key = {}
 
     for key, label, placeholder in FIELD_SPECS:
+        if key == "police_station" and recipient != "SHO":
+            continue
+        if key == "district" and recipient not in ("LCC", "Protection Officer"):
+            continue
         if key == "workplace_name" and recipient not in ("ICC", "LCC"):
             continue
 
-        form_val = details.get(key, "").strip() if details.get(key) else ""
+        form_val = sanitized_details.get(key, "").strip() if sanitized_details.get(key) else ""
         if form_val:
             field = DraftField(
                 key=key,
@@ -277,26 +335,34 @@ def build_draft(req: DraftRequest, search=None, llm=None) -> DraftResult:
         fields.append(field)
         fields_by_key[key] = field
 
-    # 5. Recipient title
-    base_title = RECIPIENT_TITLES.get(recipient, RECIPIENT_TITLES["SHO"])
-    if recipient == "ICC":
-        wp_val = fields_by_key.get("workplace_name").value if "workplace_name" in fields_by_key else "[Name of Workplace]"
+    # Recipient title
+    if recipient == "SHO":
+        ps_val = fields_by_key["police_station"].value
+        recipient_title = f"The Station House Officer, {ps_val}"
+    elif recipient == "ICC":
+        wp_val = fields_by_key["workplace_name"].value
         recipient_title = f"The Presiding Officer, Internal Complaints Committee, {wp_val}"
+    elif recipient == "LCC":
+        dist_val = fields_by_key["district"].value
+        recipient_title = f"The Chairperson, Local Complaints Committee, {dist_val}"
+    elif recipient == "Protection Officer":
+        dist_val = fields_by_key["district"].value
+        recipient_title = f"The Protection Officer, {dist_val}"
     else:
-        recipient_title = base_title
+        recipient_title = "The Station House Officer, [Name of Police Station]"
 
-    # 6. Build fixed template body
+    # Build fixed template body
     subject = SUBJECTS.get(recipient, "Complaint and request to register an FIR")
-    date_line = "[Date of Letter]"
-    c_name = fields_by_key.get("complainant_name").value
-    c_addr = fields_by_key.get("complainant_address").value
-    c_phone = fields_by_key.get("complainant_phone").value
-    r_name = fields_by_key.get("respondent_name").value
-    r_des = fields_by_key.get("respondent_designation").value
-    i_date = fields_by_key.get("incident_date").value
-    i_time = fields_by_key.get("incident_time").value
-    i_place = fields_by_key.get("incident_place").value
-    witnesses = fields_by_key.get("witnesses").value
+    date_line = fields_by_key["letter_date"].value
+    c_name = fields_by_key["complainant_name"].value
+    c_addr = fields_by_key["complainant_address"].value
+    c_phone = fields_by_key["complainant_phone"].value
+    r_name = fields_by_key["respondent_name"].value
+    r_des = fields_by_key["respondent_designation"].value
+    i_date = fields_by_key["incident_date"].value
+    i_time = fields_by_key["incident_time"].value
+    i_place = fields_by_key["incident_place"].value
+    witnesses = fields_by_key["witnesses"].value
 
     details_lines = [
         "Details of the incident:",
@@ -304,7 +370,7 @@ def build_draft(req: DraftRequest, search=None, llm=None) -> DraftResult:
         f"- Designation or relationship: {r_des}",
     ]
     if recipient in ("ICC", "LCC"):
-        wp_val = fields_by_key.get("workplace_name").value
+        wp_val = fields_by_key["workplace_name"].value
         details_lines.append(f"- Workplace: {wp_val}")
 
     details_lines.extend([
@@ -335,7 +401,7 @@ def build_draft(req: DraftRequest, search=None, llm=None) -> DraftResult:
         f"{closing}"
     )
 
-    # 7. missing_fields and notes
+    # missing_fields and notes
     missing_fields = [f.key for f in fields if f.is_placeholder]
     notes = []
     if recipient in ("ICC", "LCC"):
@@ -349,9 +415,15 @@ def build_draft(req: DraftRequest, search=None, llm=None) -> DraftResult:
         if "bnss_2023" in doc_ids:
             notes.append("You can register a Zero FIR at any police station")
 
+    if chosen_by_routing and has_both_icc_and_lcc:
+        notes.append(
+            "If your workplace has fewer than 10 employees, or the complaint is against the "
+            "employer, address this letter to the Local Complaints Committee instead."
+        )
+
     notes.append("Review every [bracketed] item before you send this letter.")
 
-    # 8. references
+    # references
     references = []
     if search is not None and results:
         references = [r["heading"] for r in results[:3] if isinstance(r, dict) and "heading" in r]

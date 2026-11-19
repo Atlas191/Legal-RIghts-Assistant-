@@ -40,6 +40,11 @@ class LegalPipeline:
         self._search = load_search()
         logger.info("Search engine loaded in %.2fs", time.time() - t0)
 
+    @property
+    def search(self):
+        """Public access to the underlying search function."""
+        return self._search
+
     def ask(self, query: str, history: list[Turn] | None = None) -> AskResult:
         """Answer a user query. Stateless — caller provides history if needed."""
         # --- Input validation ---

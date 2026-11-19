@@ -5,6 +5,7 @@ Exit code 0 = all pass, 1 = at least one failure.
 import io
 import logging
 import os
+import re
 import sys
 
 # Ensure project root is on sys.path
@@ -50,6 +51,7 @@ def test_2_narrative_with_extracted_fields():
     """2. 'On 12 March 2026 at about 6 pm in the office cabin my manager touched me'
 
     -> date, time, place and designation filled with source user_text; respondent_name still a placeholder.
+    Exact place asserted as 'office cabin'. Tests for 'desk' and 'house' as well.
     """
     narrative = "On 12 March 2026 at about 6 pm in the office cabin my manager touched me"
     req = DraftRequest(narrative=narrative)
@@ -66,9 +68,10 @@ def test_2_narrative_with_extracted_fields():
     assert field_map["incident_time"].source == "user_text", f"Time source: {field_map['incident_time'].source}"
     assert not field_map["incident_time"].is_placeholder
 
-    # Place
+    # Place: exact "office cabin"
     assert field_map["incident_place"].source == "user_text", f"Place source: {field_map['incident_place'].source}"
     assert not field_map["incident_place"].is_placeholder
+    assert field_map["incident_place"].value == "office cabin", f"Expected 'office cabin', got {field_map['incident_place'].value!r}"
 
     # Designation
     assert field_map["respondent_designation"].source == "user_text"
@@ -79,6 +82,16 @@ def test_2_narrative_with_extracted_fields():
     assert field_map["respondent_name"].is_placeholder
     assert field_map["respondent_name"].source == "placeholder"
     assert "respondent_name" in result.missing_fields
+
+    # Test "at the desk on Monday morning" gives "desk"
+    res_desk = build_draft(DraftRequest(narrative="at the desk on Monday morning someone harassed me"))
+    f_desk = {f.key: f for f in res_desk.fields}
+    assert f_desk["incident_place"].value == "desk", f"Expected 'desk', got {f_desk['incident_place'].value!r}"
+
+    # Test "in my house when he came back" gives "house"
+    res_house = build_draft(DraftRequest(narrative="in my house when he came back he hit me"))
+    f_house = {f.key: f for f in res_house.fields}
+    assert f_house["incident_place"].value == "house", f"Expected 'house', got {f_house['incident_place'].value!r}"
 
     return True
 
@@ -255,9 +268,10 @@ def test_9_logging_privacy():
 
 
 def test_10_no_placeholder_is_lost():
-    """10. no placeholder is lost: for any case, every key in missing_fields
+    """10. no placeholder is lost: for any case, remove narrative from body,
 
-    appears as its placeholder inside body.
+    find all [^]]+ occurrences in what remains, and assert each one equals
+    the placeholder of a field whose key is in missing_fields, and vice versa.
     """
     cases = [
         DraftRequest(narrative="someone harassed me"),
@@ -272,20 +286,95 @@ def test_10_no_placeholder_is_lost():
         DraftRequest(
             narrative="on 12 March 2026 my manager touched me",
             recipient="LCC",
-            details={"complainant_name": "Priya Sharma"},
+            details={"complainant_name": "Priya Sharma", "district": "Bengaluru Urban"},
+        ),
+        DraftRequest(
+            narrative="police refused my complaint",
+            recipient="SHO",
+            details={"police_station": "Indiranagar Police Station"},
         ),
     ]
 
     for req in cases:
         res = build_draft(req)
-        # Build mapping from key to placeholder
-        placeholder_map = {k: ph for k, _, ph in FIELD_SPECS}
-        for key in res.missing_fields:
-            ph = placeholder_map[key]
-            assert ph in res.body, (
-                f"Missing field {key} with placeholder {ph!r} not found in body!\n"
-                f"Recipient: {res.recipient}\nBody:\n{res.body}"
-            )
+        # Remove narrative from body
+        body_without_narrative = res.body.replace(req.narrative.strip(), "")
+        found_brackets = set(re.findall(r"\[[^\]]+\]", body_without_narrative))
+        expected_brackets = {f.value for f in res.fields if f.key in res.missing_fields}
+        assert found_brackets == expected_brackets, (
+            f"Brackets mismatch for recipient {res.recipient}!\n"
+            f"Found: {found_brackets}\n"
+            f"Expected: {expected_brackets}\n"
+            f"Diff (extra in body): {found_brackets - expected_brackets}\n"
+            f"Diff (missing from body): {expected_brackets - found_brackets}"
+        )
+
+    return True
+
+
+def test_11_headcount_unknown_note():
+    """3) If recipient chosen by routing and routed forums contained both ICC and LCC (headcount unknown),
+
+    add note: 'If your workplace has fewer than 10 employees, or the complaint is against the employer,
+    address this letter to the Local Complaints Committee instead.'
+    Present with 'my manager touched me at work'; absent when recipient='ICC' explicitly.
+    """
+    req_routed = DraftRequest(narrative="my manager touched me at work")
+    res_routed = build_draft(req_routed)
+    expected_note = (
+        "If your workplace has fewer than 10 employees, or the complaint is against the "
+        "employer, address this letter to the Local Complaints Committee instead."
+    )
+    assert expected_note in res_routed.notes, f"Expected note missing from {res_routed.notes}"
+
+    req_explicit = DraftRequest(narrative="my manager touched me at work", recipient="ICC")
+    res_explicit = build_draft(req_explicit)
+    assert expected_note not in res_explicit.notes, f"Note should not be present when recipient='ICC' explicitly: {res_explicit.notes}"
+
+    return True
+
+
+def test_12_respondent_name_honorific_regex():
+    """4) Respondent name regex \\b(?:Mr|Mrs|Ms|Miss|Dr|Shri|Smt)\\.?\\s+[A-Z][a-z]+(?:\\s+[A-Z][a-z]+)?
+
+    fills respondent_name with source 'user_text' when not provided via details or LLM.
+    Test with 'my supervisor Mr. Gupta approached me'.
+    """
+    narrative = "my supervisor Mr. Gupta approached me"
+    res = build_draft(DraftRequest(narrative=narrative))
+    field_map = {f.key: f for f in res.fields}
+    assert field_map["respondent_name"].value == "Mr. Gupta", f"Expected 'Mr. Gupta', got {field_map['respondent_name'].value!r}"
+    assert field_map["respondent_name"].source == "user_text"
+    assert not field_map["respondent_name"].is_placeholder
+    assert "respondent_name" not in res.missing_fields
+
+    return True
+
+
+def test_13_details_sanitization_and_validation():
+    """5) details values: collapse whitespace and newlines to single spaces, strip,
+
+    raise ValueError if > 200 chars, ignore unknown keys.
+    """
+    # Whitespace collapsing & stripping
+    details = {
+        "complainant_name": "  Priya \n\n  Sharma  ",
+        "unknown_key_to_ignore": "some value",
+    }
+    res = build_draft(DraftRequest(narrative="harassment incident", details=details))
+    field_map = {f.key: f for f in res.fields}
+    assert field_map["complainant_name"].value == "Priya Sharma"
+    assert "unknown_key_to_ignore" not in field_map
+
+    # > 200 chars raises ValueError
+    oversized_details = {
+        "complainant_name": "A" * 201,
+    }
+    try:
+        build_draft(DraftRequest(narrative="harassment incident", details=oversized_details))
+        assert False, "Should have raised ValueError for > 200 chars detail value"
+    except ValueError:
+        pass
 
     return True
 
@@ -304,7 +393,10 @@ TESTS = [
     ("7. recipient choice (workplace -> ICC/LCC, refused -> SHO, explicit override)", test_7_recipient_choice),
     ("8. empty and 4001-character narratives raise ValueError", test_8_empty_and_oversize_raise_value_error),
     ("9. logging test: narrative text is completely absent from logs", test_9_logging_privacy),
-    ("10. no placeholder lost: every key in missing_fields appears as placeholder in body", test_10_no_placeholder_is_lost),
+    ("10. no placeholder lost: every bracket in body equals a missing_field placeholder & vice versa", test_10_no_placeholder_is_lost),
+    ("11. note present for routed both ICC and LCC, absent when recipient explicit", test_11_headcount_unknown_note),
+    ("12. respondent name honorific regex extracted from narrative", test_12_respondent_name_honorific_regex),
+    ("13. details values collapsed, stripped, validated <= 200 chars, unknown keys ignored", test_13_details_sanitization_and_validation),
 ]
 
 

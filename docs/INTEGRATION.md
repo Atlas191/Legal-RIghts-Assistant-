@@ -11,11 +11,11 @@ FastAPI (or any Python) backend.
 |-----------------|--------|-------------|
 | `Turn`          | `role: Literal["user", "assistant"]`, `text: str` | Conversation history turn |
 | `Source`        | `id: str`, `heading: str`, `act: str`, `section: str`, `source_file: str`, `text: str = ""`, `formerly_ipc: str = ""` | Individual legal section |
-| `Forum`         | `name: str`, `why: str`, `time_limit: str | None = None`, `kb_ref: str`, `category: Literal["safety", "institutional", "criminal", "legal_aid", "national", "other"] = "other"` | Recommended legal forum, helpline, or authority |
-| `RoadmapAction` | `text: str`, `basis: Literal["kb", "general_guidance"]`, `kb_ref: str | None = None`, `time_limit: str | None = None` | Specific recommended action in the roadmap |
+| `Forum`         | `name: str`, `why: str`, `time_limit: str or None = None`, `kb_ref: str`, `category: Literal["safety", "institutional", "criminal", "legal_aid", "national", "other"] = "other"` | Recommended legal forum, helpline, or authority |
+| `RoadmapAction` | `text: str`, `basis: Literal["kb", "general_guidance"]`, `kb_ref: str or None = None`, `time_limit: str or None = None` | Specific recommended action in the roadmap |
 | `RoadmapStep`   | `step: int`, `kind: Literal["immediate", "institutional", "legal"]`, `title: str`, `actions: list[RoadmapAction]` | Sequential milestone in the assistance roadmap |
 | `AskResult`     | `off_topic: bool`, `answer: str`, `verified: bool`, `fallback: bool`, `sources: list[Source]`, `disclaimer: str`, `resolved_query: str`, `cited_source_ids: list[str] = []`, `routing: list[Forum] = []`, `needs_info: list[str] = []`, `roadmap: list[RoadmapStep] = []` | Pipeline output |
-| `DraftRequest`  | `narrative: str`, `recipient: Literal["SHO", "ICC", "LCC", "Protection Officer"] \| None = None`, `details: dict[str, str] = {}` | Complaint / petition drafting input request |
+| `DraftRequest`  | `narrative: str`, `recipient: Literal["SHO", "ICC", "LCC", "Protection Officer"] or None = None`, `details: dict[str, str] = {}` | Complaint / petition drafting input request |
 | `DraftField`    | `key: str`, `label: str`, `value: str`, `is_placeholder: bool`, `source: Literal["user_form", "user_text", "placeholder"]` | Structured field metadata for complaint template |
 | `DraftResult`   | `recipient: str`, `recipient_title: str`, `subject: str`, `fields: list[DraftField]`, `body: str`, `missing_fields: list[str]`, `notes: list[str]`, `references: list[str]`, `disclaimer: str` | Complete draft complaint / petition with placeholders |
 
@@ -139,7 +139,7 @@ class AskRequest(BaseModel):
     query: str
     history: list[Turn] = []
 
-@app.post("/ask", response_model=AskResult)
+@app.post("/api/ask", response_model=AskResult)
 def ask(req: AskRequest):
     try:
         return get_pipeline().ask(req.query, req.history or None)
@@ -150,7 +150,7 @@ def ask(req: AskRequest):
 def create_draft(req: DraftRequest):
     try:
         # Reuses the warmed-up search instance from the pipeline singleton
-        search_fn = get_pipeline()._search
+        search_fn = get_pipeline().search
         return build_draft(req, search=search_fn)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
