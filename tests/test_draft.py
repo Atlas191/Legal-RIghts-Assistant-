@@ -398,6 +398,42 @@ def test_13_details_sanitization_and_validation():
     return True
 
 
+def test_14_temporal_word_skipped_in_place():
+    """14. 'yesterday in the evening he hit me' -> incident_place is a placeholder, incident_time == 'in the evening'"""
+    res = build_draft(DraftRequest(narrative="yesterday in the evening he hit me"))
+    field_map = {f.key: f for f in res.fields}
+    assert field_map["incident_place"].is_placeholder, f"Expected incident_place to be placeholder, got {field_map['incident_place'].value}"
+    assert field_map["incident_time"].value == "in the evening", f"Expected 'in the evening', got {field_map['incident_time'].value}"
+    return True
+
+
+def test_15_place_after_skipped_temporal():
+    """15. 'at the time he shouted at me in the kitchen' -> incident_place == 'kitchen'"""
+    res = build_draft(DraftRequest(narrative="at the time he shouted at me in the kitchen"))
+    field_map = {f.key: f for f in res.fields}
+    assert field_map["incident_place"].value == "kitchen", f"Expected 'kitchen', got {field_map['incident_place'].value}"
+    assert not field_map["incident_place"].is_placeholder
+    return True
+
+
+def test_16_date_without_year():
+    """16. 'on 12 March my manager touched me' -> incident_date == '12 March'"""
+    res = build_draft(DraftRequest(narrative="on 12 March my manager touched me"))
+    field_map = {f.key: f for f in res.fields}
+    assert field_map["incident_date"].value == "12 March", f"Expected '12 March', got {field_map['incident_date'].value}"
+    assert not field_map["incident_date"].is_placeholder
+    return True
+
+
+def test_17_date_with_year():
+    """17. 'on 12 March 2026 my manager touched me' -> incident_date == '12 March 2026'"""
+    res = build_draft(DraftRequest(narrative="on 12 March 2026 my manager touched me"))
+    field_map = {f.key: f for f in res.fields}
+    assert field_map["incident_date"].value == "12 March 2026", f"Expected '12 March 2026', got {field_map['incident_date'].value}"
+    assert not field_map["incident_date"].is_placeholder
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
@@ -416,6 +452,10 @@ TESTS = [
     ("11. note present for routed both ICC and LCC, absent when recipient explicit", test_11_headcount_unknown_note),
     ("12. respondent name honorific regex extracted from narrative", test_12_respondent_name_honorific_regex),
     ("13. details values collapsed, stripped, validated <= 200 chars, unknown keys ignored", test_13_details_sanitization_and_validation),
+    ("14. 'yesterday in the evening he hit me' -> incident_place is placeholder, incident_time == 'in the evening'", test_14_temporal_word_skipped_in_place),
+    ("15. 'at the time he shouted at me in the kitchen' -> incident_place == 'kitchen'", test_15_place_after_skipped_temporal),
+    ("16. 'on 12 March my manager touched me' -> incident_date == '12 March'", test_16_date_without_year),
+    ("17. 'on 12 March 2026 my manager touched me' -> incident_date == '12 March 2026'", test_17_date_with_year),
 ]
 
 
