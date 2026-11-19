@@ -24,13 +24,18 @@ Navigating legal remedies in India can be daunting for non-lawyers, especially d
 
 ## 🏛️ Knowledge Base & Legal Scope
 
-The system retrieves exclusively from authoritative, metadata-tagged legal documents located in `./knowledge_base/`:
+The system retrieves exclusively from 11 authoritative, metadata-tagged legal documents located in `./knowledge_base/`:
 
 | Source File | Statute / Mandate | Key Provisions Covered |
 |---|---|---|
 | `bns_2023.md` | **Bharatiya Nyaya Sanhita, 2023 (BNS)** | Chapter V offences against women and children: Rape (s.63–64), Outraging modesty (s.74), Sexual harassment (s.75), Voyeurism (s.77), Stalking (s.78), Dowry death (s.80), Cruelty by husband/in-laws (s.85–86 replacing IPC 498A), Acid attack (s.124). |
+| `bnss_2023.md` | **Bharatiya Nagarik Suraksha Sanhita, 2023 (BNSS)** | Criminal procedure for women: Mandatory FIR & Zero FIR (s.173), Remedies if police refuse FIR (s.173(4)), Magistrate statements by woman magistrate (s.183), Medical examination (s.184), Victim compensation & free treatment (s.396), In-camera trial (s.366). |
 | `pwdva_2005.md` | **Protection of Women from Domestic Violence Act, 2005 (PWDVA)** | Definitions of domestic violence (s.3), Application to Magistrate (s.12), Residence orders (s.17 & 19), Protection orders (s.18), Monetary relief (s.20). |
 | `posh_handbook.md` | **POSH Act 2013 & MWCD Handbook** | Aggrieved woman definition, workplace scope, Internal Committee (IC) vs Local Committee (LC), 3-month filing timeline, employer obligations. |
+| `posh_act_supplement.md` | **POSH Act, 2013 (Act Provisions Supplement)** | Statutory gaps filled: 3-month complaint timeline extension criteria (s.9), mandatory ICC establishment thresholds (s.4), no monetary settlement in conciliation (s.10). |
+| `dowry_prohibition_1961.md` | **Dowry Prohibition Act, 1961** | Definition of dowry (s.2), penalties for giving/taking/demanding dowry (s.3–4), dowry agreement void (s.5), transfer of dowry to the woman or her heirs (s.6). |
+| `nalsa_charter.md` | **Legal Services Authorities Act, 1987 & NALSA** | Free legal aid entitlement for all women under Section 12(c), legal aid clinics, DLSA/SLSA application procedure, and free legal services helpline (15100). |
+| `helplines_and_portals.md` | **Emergency Helplines & Portals Directory** | Centralized directory: National Emergency (112), Women Helpline (1091/181), Cybercrime portal (cybercrime.gov.in / 1930), National Legal Aid (15100), SHe-Box portal. |
 | `it_act_2000.md` | **Information Technology Act, 2000 (IT Act)** | Violation of privacy & hidden cameras (s.66E), Obscene electronic transmissions (s.67), Sexually explicit acts online / revenge porn (s.67A), Child sexual abuse material (s.67B). |
 | `maternity_benefit_act.md` | **Maternity Benefit Act, 1961 (2017 Amendment)** | 26-week maternity leave entitlement, work from home provisions, protection against unlawful dismissal during pregnancy. |
 | `ncw_charter.md` | **National Commission for Women (NCW) Charter** | Citizen charter 2026–2027: Mandates, statutory inquiry powers, and grievance redressal mechanisms. |
@@ -118,15 +123,20 @@ Prevents arbitrary or unrelated queries from retrieving legal text:
 
 ```
 Legal_Assistant/
-├── knowledge_base/               # Curated, metadata-tagged statutory markdown files
+├── knowledge_base/               # Curated, metadata-tagged statutory markdown files (11 files)
 │   ├── bns_2023.md               # Bharatiya Nyaya Sanhita, 2023 (Offences against women)
-│   ├── pwdva_2005.md             # Protection of Women from Domestic Violence Act, 2005
-│   ├── posh_handbook.md          # Sexual Harassment of Women at Workplace (POSH) 2013
+│   ├── bnss_2023.md              # Bharatiya Nagarik Suraksha Sanhita, 2023 (FIR & criminal procedure)
+│   ├── dowry_prohibition_1961.md # Dowry Prohibition Act, 1961
+│   ├── helplines_and_portals.md  # Helplines, emergency numbers and portals directory
 │   ├── it_act_2000.md            # IT Act 2000 (Cyber offences, voyeurism, privacy)
 │   ├── maternity_benefit_act.md  # Maternity Benefit Act, 1961
-│   └── ncw_charter.md            # National Commission for Women Citizen's Charter
+│   ├── nalsa_charter.md          # Legal Services Authorities Act, 1987 (Free legal aid)
+│   ├── ncw_charter.md            # National Commission for Women Citizen's Charter
+│   ├── posh_act_supplement.md    # POSH Act, 2013 statutory provisions supplement
+│   ├── posh_handbook.md          # Sexual Harassment of Women at Workplace (POSH) Handbook
+│   └── pwdva_2005.md             # Protection of Women from Domestic Violence Act, 2005
 ├── tests/
-│   ├── run_golden.py             # 12-case regression test suite for retrieval & gates
+│   ├── run_golden.py             # 16-case regression test suite for retrieval & gates
 │   └── test_generate.py          # Unit tests for citation verification logic
 ├── demo.py                       # Interactive CLI application (with optional --llm mode)
 ├── generate.py                   # Local Ollama generation, verification, and fallback
@@ -164,7 +174,7 @@ Run `ingest.py` to parse all knowledge base files and generate the local ChromaD
 ```bash
 python ingest.py
 ```
-*Expected output: `98 sections -> 125 child chunks` indexed into `./chroma_db`.*
+*Expected output: `135 sections -> 165 child chunks` indexed into `./chroma_db`.*
 
 ### 3. Setup Ollama (for LLM generation)
 Make sure Ollama is running and pull the model:
@@ -242,7 +252,7 @@ RELEVANT LEGAL SECTIONS FOUND: 3
 Automated test suites ensure retrieval accuracy and anti-hallucination compliance:
 
 ### 1. Retrieval & Gate Regression Suite (`run_golden.py`)
-Evaluates 12 representative legal scenarios and off-topic adversarial queries:
+Evaluates 16 representative legal scenarios and off-topic adversarial queries:
 ```bash
 python tests/run_golden.py
 ```
@@ -250,17 +260,21 @@ python tests/run_golden.py
   [PASS] '498A'                                           -> matches Section 85
   [PASS] 'capital of india'                               -> refused (off-topic)
   [PASS] 'how can i apply for a new passport...'          -> refused (off-topic)
-  [PASS] 'how do i file my income tax return'             -> refused (off-topic)
+  [FAIL] 'how do i file my income tax return'             -> dist=0.85, bm25=6.1 (leaked via NALSA income clause)
   [PASS] 'my boss keeps touching me at work'              -> matches POSH
   [PASS] 'my husband beats me and threw me out'           -> matches PWDVA
   [PASS] 'someone is sending me obscene messages online'  -> matches IT Act
   [PASS] 'can my employer fire me for being pregnant'     -> matches Maternity Benefit
   [PASS] 'a man keeps following me and calling me'        -> matches Section 78 (Stalking)
   [PASS] 'someone shared my private photos without consent' -> matches 66E
-  [PASS] 'what can the National Commission for Women do'  -> matches NCW
+  [PASS] 'what can the National Commission for Women do'  -> matches NCW / Helplines
   [PASS] 'how long do I have to file a complaint at work' -> matches POSH
+  [PASS] 'police refused to register my FIR'              -> matches Bharatiya Nagarik Suraksha
+  [PASS] "I can't afford a lawyer"                        -> matches Legal Services
+  [PASS] 'what number do I call for help'                 -> matches Helplines
+  [PASS] 'my complaint is more than three months old...'  -> matches POSH
 
-12/12 passed.
+15/16 passed.
 ```
 
 ### 2. Citation Verification Unit Tests (`test_generate.py`)

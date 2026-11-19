@@ -14,9 +14,12 @@ OFF_TOPIC_MSG = (
     "Try describing a situation about:\n"
     "  - harassment at work (POSH Act)\n"
     "  - domestic violence or being thrown out of your home (PWDVA)\n"
-    "  - stalking, voyeurism, threats or online harassment (BNS)\n"
-    "  - cruelty or dowry harassment by a husband or in-laws (BNS)\n"
-    "  - what the National Commission for Women can do"
+    "  - stalking, voyeurism, threats or online abuse (BNS & IT Act)\n"
+    "  - cruelty or dowry harassment by a husband or in-laws (BNS & Dowry Prohibition Act)\n"
+    "  - maternity rights and benefits at work\n"
+    "  - police procedure and filing an FIR or Zero FIR (BNSS)\n"
+    "  - free legal aid and how to get a lawyer (NALSA)\n"
+    "  - emergency helplines and what the National Commission for Women can do"
 )
 
 

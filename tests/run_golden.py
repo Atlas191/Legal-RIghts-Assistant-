@@ -39,6 +39,14 @@ CASES = [
      "match", "National Commission for Women"),
     ("how long do I have to file a complaint at work",
      "match", "POSH"),
+    ("police refused to register my FIR",
+     "match", "Bharatiya Nagarik Suraksha"),
+    ("I can't afford a lawyer",
+     "match", "Legal Services"),
+    ("what number do I call for help",
+     "match", "Helplines"),
+    ("my complaint is more than three months old at work",
+     "match", "POSH"),
 ]
 
 
