@@ -65,6 +65,29 @@ def build_search(vectorstore, chunks):
             p["bm25"] = max(p["bm25"], float(bm_scores[by_id[cid]]))
         ranked = list(parents.values())
 
+        if is_statute_lookup:
+            m = re.search(r"\b\d{1,3}[a-z]{0,2}\b", query, re.I)
+            if m:
+                token = m.group(0)
+                sec_re = re.compile(rf"\bSections?\s+{re.escape(token)}\b", re.I)
+
+                def _matches_statute(p):
+                    meta = p["meta"]
+                    h = meta.get("heading", "")
+                    if sec_re.search(h):
+                        return True
+                    formerly = meta.get("formerly_ipc", "")
+                    if formerly:
+                        for part in formerly.split(","):
+                            part = part.strip()
+                            if part.lower() == token.lower() or re.search(rf"\b{re.escape(token)}\b", part, re.I):
+                                return True
+                    return False
+
+                matched = [p for p in ranked if _matches_statute(p)]
+                unmatched = [p for p in ranked if not _matches_statute(p)]
+                ranked = matched + unmatched
+
         lookup = len(q_tokens) <= LOOKUP_MAX_TOKENS
         kept = []
         for n, p in enumerate(ranked):

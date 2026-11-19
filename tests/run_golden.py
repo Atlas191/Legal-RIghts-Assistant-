@@ -14,9 +14,18 @@ from retrieval import load_search, retrieve
 # expect = "refuse"  -> off_topic must be True
 # expect = "match"   -> off_topic must be False AND substring must appear
 #                        in at least one result's "heading" or "act"
+#                        ("498A" and "section 85" require the FIRST result's heading to contain it)
 CASES = [
     ("498A",
      "match", "Section 85"),
+    ("section 85",
+     "match", "Section 85"),
+    ("354D",
+     "match", "Section 78"),
+    ("IPC 354D",
+     "match", "Section 78"),
+    ("BNS 78",
+     "match", "Section 78"),
     ("capital of india",
      "refuse", None),
     ("how can i apply for a new passport or renew my driving licence online",
@@ -96,10 +105,13 @@ def run():
                 detail = "WRONGLY REFUSED  dist=%.2f bm25=%.1f" % (
                     result["best_dist"], result["max_bm25"])
             else:
-                for r in result["results"]:
-                    if substring in r["heading"] or substring in r["act"]:
-                        ok = True
-                        break
+                if query in {"498A", "section 85"}:
+                    ok = bool(result["results"] and substring in result["results"][0]["heading"])
+                else:
+                    for r in result["results"]:
+                        if substring in r["heading"] or substring in r["act"]:
+                            ok = True
+                            break
                 heads = [r["heading"] for r in result["results"]]
                 acts  = [r["act"]     for r in result["results"]]
                 detail = "headings=%s  acts=%s" % (heads, acts)

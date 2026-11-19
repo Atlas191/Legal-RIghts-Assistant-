@@ -63,15 +63,17 @@ def load_chunks(kb_dir=KB_DIR):
             body = re.sub(r"^# .*$", "", body, flags=re.M)      # drop H1 group titles
             sec_meta, body = parse_meta_lines(body.strip())
             keywords = sec_meta.get("keywords", "")
+            formerly_ipc = sec_meta.get("formerly_ipc", "")
             section = sec_meta.get("section") or sec_meta.get("sections") or heading.split(" — ")[0]
             parent_id = f"{doc_id}:{p_idx}"
             parent_text = f"{heading}\n{body}"
             split_pieces = splitter.split_text(body)
             if not split_pieces:
                 split_pieces = [body] if body.strip() else [heading]
+            formerly_line = f"\nFormerly IPC: {formerly_ipc}" if formerly_ipc else ""
             for c_idx, piece in enumerate(split_pieces):
                 # Heading + keywords are repeated in every child so it is searchable on its own.
-                content = f"{heading}\nKeywords: {keywords}\n{piece}"
+                content = f"{heading}\nKeywords: {keywords}{formerly_line}\n{piece}"
                 children.append(Document(page_content=content, metadata={
                     "child_id": f"{parent_id}:{c_idx}",
                     "parent_id": parent_id,
@@ -81,7 +83,7 @@ def load_chunks(kb_dir=KB_DIR):
                     "section": section,
                     "heading": heading,
                     "topic": sec_meta.get("topic", ""),
-                    "formerly_ipc": sec_meta.get("formerly_ipc", ""),
+                    "formerly_ipc": formerly_ipc,
                     "source_file": fm.get("source_file", fname),
                 }))
     return children
