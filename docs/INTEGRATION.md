@@ -15,6 +15,9 @@ FastAPI (or any Python) backend.
 | `RoadmapAction` | `text: str`, `basis: Literal["kb", "general_guidance"]`, `kb_ref: str | None = None`, `time_limit: str | None = None` | Specific recommended action in the roadmap |
 | `RoadmapStep`   | `step: int`, `kind: Literal["immediate", "institutional", "legal"]`, `title: str`, `actions: list[RoadmapAction]` | Sequential milestone in the assistance roadmap |
 | `AskResult`     | `off_topic: bool`, `answer: str`, `verified: bool`, `fallback: bool`, `sources: list[Source]`, `disclaimer: str`, `resolved_query: str`, `cited_source_ids: list[str] = []`, `routing: list[Forum] = []`, `needs_info: list[str] = []`, `roadmap: list[RoadmapStep] = []` | Pipeline output |
+| `DraftRequest`  | `narrative: str`, `recipient: Literal["SHO", "ICC", "LCC", "Protection Officer"] \| None = None`, `details: dict[str, str] = {}` | Complaint / petition drafting input request |
+| `DraftField`    | `key: str`, `label: str`, `value: str`, `is_placeholder: bool`, `source: Literal["user_form", "user_text", "placeholder"]` | Structured field metadata for complaint template |
+| `DraftResult`   | `recipient: str`, `recipient_title: str`, `subject: str`, `fields: list[DraftField]`, `body: str`, `missing_fields: list[str]`, `notes: list[str]`, `references: list[str]`, `disclaimer: str` | Complete draft complaint / petition with placeholders |
 
 > [!IMPORTANT]
 > `AskResult.disclaimer` is always returned — the frontend must display it.
@@ -44,6 +47,12 @@ FastAPI (or any Python) backend.
   - `basis == "kb"`: Backed directly by statutory or regulatory knowledge base chunks (`kb_ref`).
   - `basis == "general_guidance"`: Practical non-statutory steps (e.g. evidence preservation). **The UI must display these as non-statutory advice** (e.g. labeled as general practical guidance, not a legal requirement).
 - `roadmap` is empty (`[]`) for off-topic queries or purely informational queries with no forums (such as maternity leave).
+
+### Formal Draft Generation (`DraftResult`)
+- Fixed-template formal complaint/petition letters addressed to SHO, ICC, LCC, or Protection Officers.
+- **UI Editing & Placeholders**: The UI **should let the user edit every `[bracketed]` item** and **must show `missing_fields`** (keys whose `is_placeholder == True`) as prompts or highlighted fields so the user knows what details remain to be filled before printing or submitting.
+- `references`: Possibly relevant sections, retrieved from the knowledge base (up to 3 headings from `retrieve()`), or `[]` when no search is provided.
+- `notes`: Verbatim statutory time limits (for ICC/LCC) or Zero FIR rights (for SHO under BNSS 2023), followed by `"Review every [bracketed] item before you send this letter."`.
 
 ---
 
@@ -115,8 +124,9 @@ runs in FastAPI's external threadpool, preventing blocking of the async event lo
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from schemas import Turn, AskResult
+from schemas import Turn, AskResult, DraftRequest, DraftResult
 from pipeline import get_pipeline
+from draft import build_draft
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -133,6 +143,15 @@ class AskRequest(BaseModel):
 def ask(req: AskRequest):
     try:
         return get_pipeline().ask(req.query, req.history or None)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+@app.post("/api/draft", response_model=DraftResult)
+def create_draft(req: DraftRequest):
+    try:
+        # Reuses the warmed-up search instance from the pipeline singleton
+        search_fn = get_pipeline()._search
+        return build_draft(req, search=search_fn)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 ```

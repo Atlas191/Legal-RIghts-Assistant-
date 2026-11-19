@@ -52,3 +52,30 @@ class AskResult(BaseModel):
     routing: list[Forum] = []
     needs_info: list[str] = []
     roadmap: list[RoadmapStep] = []
+
+
+class DraftRequest(BaseModel):
+    narrative: str
+    recipient: Literal["SHO", "ICC", "LCC", "Protection Officer"] | None = None
+    details: dict[str, str] = {}
+
+
+class DraftField(BaseModel):
+    key: str
+    label: str
+    value: str
+    is_placeholder: bool
+    source: Literal["user_form", "user_text", "placeholder"]
+
+
+class DraftResult(BaseModel):
+    recipient: str
+    recipient_title: str
+    subject: str
+    fields: list[DraftField]
+    body: str
+    missing_fields: list[str]
+    notes: list[str]
+    references: list[str] = []  # possibly relevant sections, retrieved from the knowledge base
+    disclaimer: str
+
