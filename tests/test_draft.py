@@ -93,6 +93,25 @@ def test_2_narrative_with_extracted_fields():
     f_house = {f.key: f for f in res_house.fields}
     assert f_house["incident_place"].value == "house", f"Expected 'house', got {f_house['incident_place'].value!r}"
 
+    # Skip temporal/transitional first-word in extract_place
+    res_eve = build_draft(DraftRequest(narrative="yesterday in the evening he hit me"))
+    f_eve = {f.key: f for f in res_eve.fields}
+    assert f_eve["incident_place"].is_placeholder, f"Expected place to be placeholder, got {f_eve['incident_place'].value}"
+    assert f_eve["incident_time"].value == "in the evening", f"Expected time 'in the evening', got {f_eve['incident_time'].value}"
+
+    res_kitchen = build_draft(DraftRequest(narrative="at the time he shouted at me in the kitchen"))
+    f_kitchen = {f.key: f for f in res_kitchen.fields}
+    assert f_kitchen["incident_place"].value == "kitchen", f"Expected place 'kitchen', got {f_kitchen['incident_place'].value}"
+
+    # Dates without a year
+    res_date_noyear = build_draft(DraftRequest(narrative="on 12 March my manager touched me"))
+    f_date_noyear = {f.key: f for f in res_date_noyear.fields}
+    assert f_date_noyear["incident_date"].value == "12 March", f"Expected date '12 March', got {f_date_noyear['incident_date'].value}"
+
+    res_date_year = build_draft(DraftRequest(narrative="on 12 March 2026 my manager touched me"))
+    f_date_year = {f.key: f for f in res_date_year.fields}
+    assert f_date_year["incident_date"].value == "12 March 2026", f"Expected date '12 March 2026', got {f_date_year['incident_date'].value}"
+
     return True
 
 

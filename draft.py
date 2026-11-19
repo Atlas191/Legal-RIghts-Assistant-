@@ -56,6 +56,10 @@ DATE_REGEXES = [
     re.compile(rf"\b\d{{1,2}}(?:st|nd|rd|th)?\s+(?:{MONTH_NAMES})\s*,?\s*\d{{4}}\b", re.I),
     # March 12, 2026 or March 12 2026
     re.compile(rf"\b(?:{MONTH_NAMES})\s+\d{{1,2}}(?:st|nd|rd|th)?\s*,?\s*\d{{4}}\b", re.I),
+    # 12 March, 12th March, 12th of March
+    re.compile(rf"\b\d{{1,2}}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:{MONTH_NAMES})\b", re.I),
+    # March 12, March 12th
+    re.compile(rf"\b(?:{MONTH_NAMES})\s+\d{{1,2}}(?:st|nd|rd|th)?\b", re.I),
     # yesterday, today, last night (kept verbatim, never converted into a calendar date)
     re.compile(r"\b(yesterday|today|last\s+night)\b", re.I),
 ]
@@ -77,6 +81,10 @@ PLACE_STOP_WORDS = {
     "and", "but", "on", "at", "during", "after", "before", "then", "because", "so",
     "was", "were", "is", "started", "tried", "asked", "said", "called", "came",
     "made", "touched", "grabbed", "hit", "beat", "kept",
+}
+
+SKIP_FIRST_WORDS = {
+    "morning", "afternoon", "evening", "night", "time", "end", "beginning", "middle", "day"
 }
 
 DESIGNATION_RE = re.compile(
@@ -115,6 +123,8 @@ def extract_place(text: str) -> str | None:
 
     Takes words one by one, stopping at the first punctuation (, . ; \n) or
     stop word. Capped at 4 words. Returns None if no word remains.
+    Skips a match if its first collected word is a temporal or transitional word
+    (morning, afternoon, evening, night, time, end, beginning, middle, day).
     """
     pattern = re.compile(r"\b(?:at|in)\s+(?:the|my)\s+", re.I)
     for m in pattern.finditer(text):
@@ -132,6 +142,8 @@ def extract_place(text: str) -> str | None:
             if len(collected) == 4:
                 break
         if collected:
+            if collected[0].lower() in SKIP_FIRST_WORDS:
+                continue
             return " ".join(collected)
     return None
 

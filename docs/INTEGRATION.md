@@ -50,9 +50,128 @@ FastAPI (or any Python) backend.
 
 ### Formal Draft Generation (`DraftResult`)
 - Fixed-template formal complaint/petition letters addressed to SHO, ICC, LCC, or Protection Officers.
+- **Allowed `DraftRequest.details` keys**:
+  `letter_date`, `police_station`, `district`, `complainant_name`, `complainant_address`, `complainant_phone`, `respondent_name`, `respondent_designation`, `workplace_name`, `incident_date`, `incident_time`, `incident_place`, `witnesses`.
+  - Values must be $\le 200$ characters. Whitespace and newlines are collapsed to single spaces. Keys outside this list are ignored.
 - **UI Editing & Placeholders**: The UI **should let the user edit every `[bracketed]` item** and **must show `missing_fields`** (keys whose `is_placeholder == True`) as prompts or highlighted fields so the user knows what details remain to be filled before printing or submitting.
+- **Form Refinement Lifecycle**: After the user fills in the placeholders, send the same narrative with the filled values in `"details"` to `POST /api/draft` again; the letter is regenerated from the fixed template with user values substituting the bracketed placeholders.
 - `references`: Possibly relevant sections, retrieved from the knowledge base (up to 3 headings from `retrieve()`), or `[]` when no search is provided.
-- `notes`: Verbatim statutory time limits (for ICC/LCC) or Zero FIR rights (for SHO under BNSS 2023), followed by `"Review every [bracketed] item before you send this letter."`.
+- `notes`: Verbatim statutory time limits (for ICC/LCC) or Zero FIR rights (for SHO under BNSS 2023), followed by `"Review every [bracketed] item before you send this letter."`. When workplace headcount is unknown and routing surfaces both ICC and LCC, a reminder note to address LCC if staff $<10$ is included.
+
+#### Sample `POST /api/draft` Request
+```json
+{
+  "narrative": "On 12 March 2026 at about 6 pm in the office cabin my manager touched me inappropriately.",
+  "recipient": null,
+  "details": {
+    "complainant_name": "Priya Sharma",
+    "workplace_name": "Acme Technologies"
+  }
+}
+```
+
+#### Sample `POST /api/draft` Response
+```json
+{
+  "recipient": "ICC",
+  "recipient_title": "The Presiding Officer, Internal Complaints Committee, Acme Technologies",
+  "subject": "Complaint regarding sexual harassment at the workplace",
+  "fields": [
+    {
+      "key": "letter_date",
+      "label": "Date of Letter",
+      "value": "[Date of Letter]",
+      "is_placeholder": true,
+      "source": "placeholder"
+    },
+    {
+      "key": "complainant_name",
+      "label": "Complainant Name",
+      "value": "Priya Sharma",
+      "is_placeholder": false,
+      "source": "user_form"
+    },
+    {
+      "key": "complainant_address",
+      "label": "Complainant Address",
+      "value": "[Your Address]",
+      "is_placeholder": true,
+      "source": "placeholder"
+    },
+    {
+      "key": "complainant_phone",
+      "label": "Complainant Phone",
+      "value": "[Your Phone Number]",
+      "is_placeholder": true,
+      "source": "placeholder"
+    },
+    {
+      "key": "respondent_name",
+      "label": "Respondent Name",
+      "value": "[Name of the Person]",
+      "is_placeholder": true,
+      "source": "placeholder"
+    },
+    {
+      "key": "respondent_designation",
+      "label": "Respondent Designation",
+      "value": "manager",
+      "is_placeholder": false,
+      "source": "user_text"
+    },
+    {
+      "key": "workplace_name",
+      "label": "Workplace Name",
+      "value": "Acme Technologies",
+      "is_placeholder": false,
+      "source": "user_form"
+    },
+    {
+      "key": "incident_date",
+      "label": "Date of Incident",
+      "value": "12 March 2026",
+      "is_placeholder": false,
+      "source": "user_text"
+    },
+    {
+      "key": "incident_time",
+      "label": "Time of Incident",
+      "value": "at about 6 pm",
+      "is_placeholder": false,
+      "source": "user_text"
+    },
+    {
+      "key": "incident_place",
+      "label": "Place of Incident",
+      "value": "office cabin",
+      "is_placeholder": false,
+      "source": "user_text"
+    },
+    {
+      "key": "witnesses",
+      "label": "Witnesses",
+      "value": "[Names of Witnesses, if any]",
+      "is_placeholder": true,
+      "source": "placeholder"
+    }
+  ],
+  "body": "[Date of Letter]\n\nThe Presiding Officer, Internal Complaints Committee, Acme Technologies\n\nSubject: Complaint regarding sexual harassment at the workplace\n\nRespected Sir/Madam,\n\nI, Priya Sharma, am submitting this formal complaint regarding an incident that occurred against me.\n\nDetails of the incident:\n- Name of the person: [Name of the Person]\n- Designation or relationship: manager\n- Workplace: Acme Technologies\n- Date: 12 March 2026\n- Time: at about 6 pm\n- Place: office cabin\n- Witnesses: [Names of Witnesses, if any]\n\nDescription of the incident (in my own words):\nOn 12 March 2026 at about 6 pm in the office cabin my manager touched me inappropriately.\n\nI request you to take appropriate action as per law.\n\nYours faithfully,\nPriya Sharma\nAddress: [Your Address]\nPhone: [Your Phone Number]",
+  "missing_fields": [
+    "letter_date",
+    "complainant_address",
+    "complainant_phone",
+    "respondent_name",
+    "witnesses"
+  ],
+  "notes": [
+    "3 months from the last incident, extendable by up to 3 months for reasons recorded in writing (verify)",
+    "If your workplace has fewer than 10 employees, or the complaint is against the employer, address this letter to the Local Complaints Committee instead.",
+    "Review every [bracketed] item before you send this letter."
+  ],
+  "references": [],
+  "disclaimer": "This information is for guidance only and does not constitute formal legal advice. Laws and procedures may vary; consult a qualified advocate or your local Legal Services Authority for advice on your specific situation."
+}
+```
 
 ---
 
