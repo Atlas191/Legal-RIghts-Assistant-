@@ -252,7 +252,7 @@ RELEVANT LEGAL SECTIONS FOUND: 3
 Automated test suites ensure retrieval accuracy and anti-hallucination compliance:
 
 ### 1. Retrieval & Gate Regression Suite (`run_golden.py`)
-Evaluates 28 representative legal scenarios and off-topic adversarial queries:
+Evaluates 29 representative legal scenarios, statute lookups, and off-topic adversarial queries:
 ```bash
 python tests/run_golden.py
 ```
@@ -285,12 +285,13 @@ python tests/run_golden.py
   [PASS] 'my husband is not paying maintenance'           -> matches Maintenance
   [PASS] 'can I get free legal help for domestic violence'-> matches Legal Services
   [PASS] 'I was thrown out of my in-laws house'           -> matches Domestic Violence
+  [PASS] '66E'                                            -> matches 66E
 
-26/28 passed.
+27/29 passed.
 ```
 
 ### 2. Citation Verification Unit Tests (`test_generate.py`)
-Validates that `verify_answer()` correctly accepts grounded answers and rejects hallucinated section numbers or invalid citations:
+Validates that `verify_answer()` correctly accepts grounded answers, supports case-insensitive section checking with boundary matching, and rejects hallucinated section numbers:
 ```bash
 python tests/test_generate.py
 ```
@@ -300,8 +301,39 @@ python tests/test_generate.py
   [PASS] [S9] with 3 sources fails
   [PASS] an answer citing "Section 999" not in sources fails
   [PASS] "Section 85" present in a source passes
+  [PASS] citing "Section 12" with only "Section 124" in sources fails
+  [PASS] "section 75" (lowercase) with "Section 75" in sources passes
+  [PASS] "section 999" (lowercase) not in sources fails
 
-5/5 passed.
+8/8 passed.
+```
+
+### 3. Pipeline Orchestration Tests (`test_pipeline.py`)
+Validates follow-up resolution, statute-reference bypass, routing integration, input limits, and privacy logging:
+```bash
+python tests/test_pipeline.py
+```
+```text
+  [PASS] on-topic returns sources and disclaimer
+  [PASS] off-topic returns off_topic=True with no Ollama call
+  [PASS] short follow-up resolves query correctly
+  [PASS] lookup query skips follow-up join
+  [PASS] follow-up joins and reroutes workplace
+  [PASS] statute lookups skip join
+  [PASS] empty query raises ValueError
+  [PASS] oversize query raises ValueError
+  [PASS] logs do not contain query text
+
+9/9 passed.
+```
+
+### 4. Legal Forum Routing Tests (`test_routing.py`)
+Validates category routing (urgent safety, institutional, criminal, legal aid, NCW), headcount-based ICC/LCC disambiguation, and clarification questions:
+```bash
+python tests/test_routing.py
+```
+```text
+15/15 passed.
 ```
 
 ---

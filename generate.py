@@ -61,9 +61,9 @@ def verify_answer(answer_text, n_sources, source_texts):
             combined_sources.append(str(s))
     all_sources_text = "\n".join(combined_sources)
 
-    section_mentions = re.findall(r"\bSection\s+\d+[A-Za-z]?\b", answer_text)
+    section_mentions = re.findall(r"\bSection\s+\d+[A-Za-z]?\b", answer_text, re.I)
     for sec in section_mentions:
-        if sec not in all_sources_text:
+        if not re.search(re.escape(sec) + r"(?![0-9A-Za-z])", all_sources_text, re.I):
             return False, f"Mentioned '{sec}' does not appear in any source."
 
     return True, ""
@@ -86,8 +86,9 @@ def _call_ollama(messages):
                 "messages": messages,
                 "options": {"temperature": 0},
                 "stream": False,
+                "keep_alive": "30m",
             },
-            timeout=60,
+            timeout=120,
         )
         elapsed = time.time() - t0
         if resp.status_code != 200:

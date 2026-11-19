@@ -1,5 +1,6 @@
 """Hybrid retrieval engine: dense (ChromaDB) + BM25 keyword, merged with Reciprocal Rank Fusion.
 Returns structured results. No printing, no input() — pure data layer."""
+import re
 from collections import defaultdict
 from rank_bm25 import BM25Okapi
 from kb_utils import load_chunks, tokenize
@@ -30,12 +31,18 @@ def build_search(vectorstore, chunks):
         max_bm25 = float(max(bm_scores)) if len(bm_scores) else 0.0
         best_dist = dense[0][1] if dense else 9.0
 
-        if best_dist > 0.75 and max_bm25 < 5.0:
-            return [], dict(off_topic=True, best_dist=best_dist, max_bm25=max_bm25)
-        if best_dist > 0.90 and len(q_tokens) > LOOKUP_MAX_TOKENS:
-            return [], dict(off_topic=True, best_dist=best_dist, max_bm25=max_bm25)
-        if best_dist > 0.80 and max_bm25 < 8.0 and len(q_tokens) > LOOKUP_MAX_TOKENS:
-            return [], dict(off_topic=True, best_dist=best_dist, max_bm25=max_bm25)
+        is_statute_lookup = bool(
+            re.fullmatch(r"(?i)\s*((section|sec|ipc|bns|bnss|s\.?)\s*)?\d{1,3}[a-z]{0,2}\s*", query)
+            and max_bm25 > 0
+        )
+
+        if not is_statute_lookup:
+            if best_dist > 0.75 and max_bm25 < 5.0:
+                return [], dict(off_topic=True, best_dist=best_dist, max_bm25=max_bm25)
+            if best_dist > 0.90 and len(q_tokens) > LOOKUP_MAX_TOKENS:
+                return [], dict(off_topic=True, best_dist=best_dist, max_bm25=max_bm25)
+            if best_dist > 0.80 and max_bm25 < 8.0 and len(q_tokens) > LOOKUP_MAX_TOKENS:
+                return [], dict(off_topic=True, best_dist=best_dist, max_bm25=max_bm25)
 
         # Reciprocal Rank Fusion over child chunks
         fused = defaultdict(float)

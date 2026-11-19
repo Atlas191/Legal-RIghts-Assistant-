@@ -43,6 +43,27 @@ TEST_CASES = [
         ["Section 85 — Husband or relative of husband subjecting woman to cruelty"],
         True,
     ),
+    (
+        'citing "Section 12" with only "Section 124" in sources fails',
+        "You are protected under Section 12 [S1].",
+        1,
+        ["Section 124 — Assault or criminal force to woman with intent to outrage her modesty"],
+        False,
+    ),
+    (
+        '"section 75" (lowercase) with "Section 75" in sources passes',
+        "This is prohibited under section 75 [S1].",
+        1,
+        ["Section 75 — Sexual harassment"],
+        True,
+    ),
+    (
+        '"section 999" (lowercase) not in sources fails',
+        "You can seek relief under section 999 [S1] of the law.",
+        1,
+        ["Section 85 — Husband or relative of husband subjecting woman to cruelty"],
+        False,
+    ),
 ]
 
 

@@ -71,6 +71,8 @@ CASES = [
      "match", "Legal Services"),
     ("I was thrown out of my in-laws house",
      "match", "Domestic Violence"),
+    ("66E",
+     "match", "66E"),
 ]
 
 
