@@ -61,6 +61,7 @@ def test_on_topic_returns_sources_and_disclaimer():
     assert hasattr(result.sources[0], "formerly_ipc")
     assert result.cited_source_ids == ["sec-bns-85"]
     assert len(result.routing) > 0
+    assert len(result.roadmap) > 0
     assert isinstance(result.needs_info, list)
     assert result.disclaimer == DISCLAIMER
     return True
@@ -77,6 +78,7 @@ def test_off_topic_no_ollama():
     assert result.cited_source_ids == []
     assert result.routing == []
     assert result.needs_info == []
+    assert result.roadmap == []
     mock_gen.assert_not_called()
     return True
 

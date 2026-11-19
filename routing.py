@@ -76,6 +76,7 @@ def route(query: str, results: list[dict]) -> tuple[list[Forum], list[str]]:
                 why="Complaint against the employer or domestic worker goes to the district LCC",
                 time_limit=LCC_TIME_LIMIT,
                 kb_ref="posh_handbook",
+                category="institutional",
             ))
         elif headcount is not None:
             if headcount >= 10:
@@ -84,6 +85,7 @@ def route(query: str, results: list[dict]) -> tuple[list[Forum], list[str]]:
                     why="Workplaces with 10 or more workers must have an Internal Complaints Committee (ICC)",
                     time_limit=ICC_TIME_LIMIT,
                     kb_ref="posh_handbook",
+                    category="institutional",
                 ))
             else:
                 institutional.append(Forum(
@@ -91,6 +93,7 @@ def route(query: str, results: list[dict]) -> tuple[list[Forum], list[str]]:
                     why="Workplaces with fewer than 10 workers fall under the district Local Complaints Committee (LCC)",
                     time_limit=LCC_TIME_LIMIT,
                     kb_ref="posh_handbook",
+                    category="institutional",
                 ))
         else:
             institutional.append(Forum(
@@ -98,12 +101,14 @@ def route(query: str, results: list[dict]) -> tuple[list[Forum], list[str]]:
                 why="If your workplace has 10 or more workers, the complaint goes to the Internal Complaints Committee (ICC)",
                 time_limit=ICC_TIME_LIMIT,
                 kb_ref="posh_handbook",
+                category="institutional",
             ))
             institutional.append(Forum(
                 name="Local Complaints Committee (LCC)",
                 why="If your workplace has fewer than 10 workers (or the complaint is against the employer), it goes to the district LCC",
                 time_limit=LCC_TIME_LIMIT,
                 kb_ref="posh_handbook",
+                category="institutional",
             ))
             needs_info.append("How many people work at your workplace?")
 
@@ -126,6 +131,7 @@ def route(query: str, results: list[dict]) -> tuple[list[Forum], list[str]]:
                 why="Emergency rescue, medical aid, shelter, and psycho-social support for women in distress (status: verify)",
                 time_limit=None,
                 kb_ref="helplines_and_portals",
+                category="safety",
             ))
 
         institutional.append(Forum(
@@ -133,6 +139,7 @@ def route(query: str, results: list[dict]) -> tuple[list[Forum], list[str]]:
             why="Provides protection orders, residence orders, and emergency relief against domestic violence",
             time_limit=PWDVA_TIME_LIMIT,
             kb_ref="pwdva_2005",
+            category="institutional",
         ))
         need_legal_aid = True
 
@@ -150,6 +157,7 @@ def route(query: str, results: list[dict]) -> tuple[list[Forum], list[str]]:
             why="To report a cognizable criminal offence and register an FIR under BNSS",
             time_limit=None,
             kb_ref="bnss_2023",
+            category="criminal",
         ))
         police_refused = bool(re.search(
             r"(police\s+refused|refus\w+|not\s+register\w*|won'?t\s+register\w*|refusing)",
@@ -161,6 +169,7 @@ def route(query: str, results: list[dict]) -> tuple[list[Forum], list[str]]:
                 why="If police refuse to register an FIR, you can submit the complaint in writing to the SP or approach the Judicial Magistrate under BNSS",
                 time_limit=None,
                 kb_ref="bnss_2023",
+                category="criminal",
             ))
         need_legal_aid = True
 
@@ -176,6 +185,7 @@ def route(query: str, results: list[dict]) -> tuple[list[Forum], list[str]]:
             why="Specialized portal to report cybercrimes, online abuse, and non-consensual sharing of intimate images",
             time_limit=None,
             kb_ref="helplines_and_portals",
+            category="criminal",
         ))
 
     # 5. Money or cost worries (DLSA)
@@ -187,6 +197,7 @@ def route(query: str, results: list[dict]) -> tuple[list[Forum], list[str]]:
             why="A woman qualifies under section 12(c) whatever her income",
             time_limit=None,
             kb_ref="nalsa_charter",
+            category="legal_aid",
         ))
 
     # 6. National Commission for Women (NCW) - always append last if legal forums apply
@@ -200,6 +211,7 @@ def route(query: str, results: list[dict]) -> tuple[list[Forum], list[str]]:
             why="Can examine complaints and take them up with authorities but is not a court and is not an implementing agency",
             time_limit=None,
             kb_ref="ncw_charter",
+            category="national",
         ))
 
     # Return forums in this order: urgent safety, institutional, criminal, legal aid, NCW. No duplicates.

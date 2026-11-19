@@ -7,12 +7,14 @@ FastAPI (or any Python) backend.
 
 ## 1. Schemas (`schemas.py`)
 
-| Model       | Fields | Description |
-|-------------|--------|-------------|
-| `Turn`      | `role: Literal["user", "assistant"]`, `text: str` | Conversation history turn |
-| `Source`    | `id: str`, `heading: str`, `act: str`, `section: str`, `source_file: str`, `text: str = ""`, `formerly_ipc: str = ""` | Individual legal section |
-| `Forum`     | `name: str`, `why: str`, `time_limit: str | None = None`, `kb_ref: str` | Recommended legal forum, helpline, or authority |
-| `AskResult` | `off_topic: bool`, `answer: str`, `verified: bool`, `fallback: bool`, `sources: list[Source]`, `disclaimer: str`, `resolved_query: str`, `cited_source_ids: list[str] = []`, `routing: list[Forum] = []`, `needs_info: list[str] = []` | Pipeline output |
+| Model           | Fields | Description |
+|-----------------|--------|-------------|
+| `Turn`          | `role: Literal["user", "assistant"]`, `text: str` | Conversation history turn |
+| `Source`        | `id: str`, `heading: str`, `act: str`, `section: str`, `source_file: str`, `text: str = ""`, `formerly_ipc: str = ""` | Individual legal section |
+| `Forum`         | `name: str`, `why: str`, `time_limit: str | None = None`, `kb_ref: str`, `category: Literal["safety", "institutional", "criminal", "legal_aid", "national", "other"] = "other"` | Recommended legal forum, helpline, or authority |
+| `RoadmapAction` | `text: str`, `basis: Literal["kb", "general_guidance"]`, `kb_ref: str | None = None`, `time_limit: str | None = None` | Specific recommended action in the roadmap |
+| `RoadmapStep`   | `step: int`, `kind: Literal["immediate", "institutional", "legal"]`, `title: str`, `actions: list[RoadmapAction]` | Sequential milestone in the assistance roadmap |
+| `AskResult`     | `off_topic: bool`, `answer: str`, `verified: bool`, `fallback: bool`, `sources: list[Source]`, `disclaimer: str`, `resolved_query: str`, `cited_source_ids: list[str] = []`, `routing: list[Forum] = []`, `needs_info: list[str] = []`, `roadmap: list[RoadmapStep] = []` | Pipeline output |
 
 > [!IMPORTANT]
 > `AskResult.disclaimer` is always returned — the frontend must display it.
@@ -33,6 +35,16 @@ FastAPI (or any Python) backend.
 - **Handling `needs_info` in UI**: When `needs_info` is non-empty, the UI should display the question(s) to the user. The user's answer is then sent as a standard `/ask` query **with the existing `history`**; the pipeline joins it to the prior message (e.g. `"my boss keeps touching me at work we are 40 people"`) and re-routes to the precise forum (e.g. resolving ICC vs LCC).
 - Both fields default to empty lists (`[]`) on off-topic queries.
 
+### Actionable Roadmap (`roadmap`)
+- Structured sequential guidance renumbered `1..n` omitting empty stages:
+  1. **Immediate steps** (`kind: "immediate"`): Emergency 112 guidance (if safety forum or danger words present) and evidence preservation (date/time logs, screenshots, medical reports, receipts).
+  2. **Institutional pathway** (`kind: "institutional"`): Internal / Local Committees, Protection Officers, and clarification follow-ups.
+  3. **Legal and judicial pathway** (`kind: "legal"`): Police FIR, SP/Magistrate escalations, Cybercrime Portal, DLSA free legal aid, and NCW.
+- **Display Rule for `basis`**:
+  - `basis == "kb"`: Backed directly by statutory or regulatory knowledge base chunks (`kb_ref`).
+  - `basis == "general_guidance"`: Practical non-statutory steps (e.g. evidence preservation). **The UI must display these as non-statutory advice** (e.g. labeled as general practical guidance, not a legal requirement).
+- `roadmap` is empty (`[]`) for off-topic queries or purely informational queries with no forums (such as maternity leave).
+
 ---
 
 ## 2. Response Status Flow
@@ -43,7 +55,7 @@ Always check `off_topic` **before** checking `fallback`:
 if result.off_topic:
     # Query is out of domain (e.g. taxes, passport).
     # result.answer contains polite refusal & suggested topics.
-    # result.sources == [], result.cited_source_ids == [], result.routing == [], result.needs_info == []
+    # result.sources == [], result.cited_source_ids == [], result.routing == [], result.needs_info == [], result.roadmap == []
 elif result.fallback:
     # Query was on-topic, but LLM generation failed or failed verification.
     # result.answer contains fallback text with retrieved headings.

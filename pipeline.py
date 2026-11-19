@@ -5,10 +5,11 @@ import logging
 import re
 import time
 
-from schemas import Turn, Source, Forum, AskResult
+from schemas import Turn, Source, Forum, RoadmapAction, RoadmapStep, AskResult
 from retrieval import load_search, retrieve
 from generate import answer as generate_answer
 from routing import route
+from roadmap import build_roadmap
 
 logger = logging.getLogger("pipeline")
 if not logger.handlers:
@@ -79,6 +80,7 @@ class LegalPipeline:
                 cited_source_ids=[],
                 routing=[],
                 needs_info=[],
+                roadmap=[],
             )
 
         # --- Forum Routing ---
@@ -87,6 +89,10 @@ class LegalPipeline:
             "Routing completed (forums=%d, needs_info=%d)",
             len(routing_forums), len(needs_info),
         )
+
+        # --- Roadmap Construction ---
+        roadmap = build_roadmap(resolved_query, ret["results"], routing_forums, needs_info)
+        logger.info("Roadmap generated (steps=%d)", len(roadmap))
 
         # --- Generation ---
         t1 = time.time()
@@ -122,6 +128,7 @@ class LegalPipeline:
             cited_source_ids=gen["citations"],
             routing=routing_forums,
             needs_info=needs_info,
+            roadmap=roadmap,
         )
 
 
