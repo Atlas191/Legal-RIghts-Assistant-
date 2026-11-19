@@ -136,7 +136,7 @@ Legal_Assistant/
 │   ├── posh_handbook.md          # Sexual Harassment of Women at Workplace (POSH) Handbook
 │   └── pwdva_2005.md             # Protection of Women from Domestic Violence Act, 2005
 ├── tests/
-│   ├── run_golden.py             # 16-case regression test suite for retrieval & gates
+│   ├── run_golden.py             # 28-case regression test suite for retrieval & gates
 │   └── test_generate.py          # Unit tests for citation verification logic
 ├── demo.py                       # Interactive CLI application (with optional --llm mode)
 ├── generate.py                   # Local Ollama generation, verification, and fallback
@@ -252,7 +252,7 @@ RELEVANT LEGAL SECTIONS FOUND: 3
 Automated test suites ensure retrieval accuracy and anti-hallucination compliance:
 
 ### 1. Retrieval & Gate Regression Suite (`run_golden.py`)
-Evaluates 16 representative legal scenarios and off-topic adversarial queries:
+Evaluates 28 representative legal scenarios and off-topic adversarial queries:
 ```bash
 python tests/run_golden.py
 ```
@@ -260,7 +260,7 @@ python tests/run_golden.py
   [PASS] '498A'                                           -> matches Section 85
   [PASS] 'capital of india'                               -> refused (off-topic)
   [PASS] 'how can i apply for a new passport...'          -> refused (off-topic)
-  [FAIL] 'how do i file my income tax return'             -> dist=0.85, bm25=6.1 (leaked via NALSA income clause)
+  [PASS] 'how do i file my income tax return'             -> refused (off-topic)
   [PASS] 'my boss keeps touching me at work'              -> matches POSH
   [PASS] 'my husband beats me and threw me out'           -> matches PWDVA
   [PASS] 'someone is sending me obscene messages online'  -> matches IT Act
@@ -273,8 +273,20 @@ python tests/run_golden.py
   [PASS] "I can't afford a lawyer"                        -> matches Legal Services
   [PASS] 'what number do I call for help'                 -> matches Helplines
   [PASS] 'my complaint is more than three months old...'  -> matches POSH
+  [FAIL] 'how to open a bank account'                     -> dist=0.81, bm25=8.3 (leaked via PWDVA/NALSA bank/apply clauses)
+  [PASS] 'what is the best way to invest in mutual funds' -> refused (off-topic)
+  [FAIL] 'how to apply for a pan card online'             -> dist=0.72, bm25=7.7 (leaked via NALSA/SHe-Box portal)
+  [PASS] "my husband's family keeps demanding more dowry" -> matches Dowry
+  [PASS] 'he threatens to post my photos if I leave him'  -> matches Criminal intimidation
+  [PASS] 'my manager asks for sexual favours in return...'-> matches Sexual harassment
+  [PASS] 'my employer did not give me maternity leave'    -> matches Maternity
+  [PASS] 'someone is stalking me on instagram'            -> matches Stalking
+  [PASS] 'how do I report a cyber crime'                  -> matches cybercrime
+  [PASS] 'my husband is not paying maintenance'           -> matches Maintenance
+  [PASS] 'can I get free legal help for domestic violence'-> matches Legal Services
+  [PASS] 'I was thrown out of my in-laws house'           -> matches Domestic Violence
 
-15/16 passed.
+26/28 passed.
 ```
 
 ### 2. Citation Verification Unit Tests (`test_generate.py`)

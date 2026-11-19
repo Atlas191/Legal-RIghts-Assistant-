@@ -34,6 +34,8 @@ def build_search(vectorstore, chunks):
             return [], dict(off_topic=True, best_dist=best_dist, max_bm25=max_bm25)
         if best_dist > 0.90 and len(q_tokens) > LOOKUP_MAX_TOKENS:
             return [], dict(off_topic=True, best_dist=best_dist, max_bm25=max_bm25)
+        if best_dist > 0.80 and max_bm25 < 8.0 and len(q_tokens) > LOOKUP_MAX_TOKENS:
+            return [], dict(off_topic=True, best_dist=best_dist, max_bm25=max_bm25)
 
         # Reciprocal Rank Fusion over child chunks
         fused = defaultdict(float)
