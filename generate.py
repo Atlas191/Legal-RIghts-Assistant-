@@ -75,14 +75,15 @@ def _extract_citations(answer_text, results):
     return [results[i - 1]["id"] for i in c_indices if 1 <= i <= len(results)]
 
 
-def _call_ollama(messages):
+def _call_ollama(messages, model=None):
     """Call Ollama chat API. Log only timing and outcome, never prompt or response content."""
     t0 = time.time()
+    use_model = model or OLLAMA_MODEL
     try:
         resp = requests.post(
             OLLAMA_URL,
             json={
-                "model": OLLAMA_MODEL,
+                "model": use_model,
                 "messages": messages,
                 "options": {"temperature": 0},
                 "stream": False,

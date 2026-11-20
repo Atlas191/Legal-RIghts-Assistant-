@@ -14,7 +14,7 @@ FastAPI (or any Python) backend.
 | `Forum`         | `name: str`, `why: str`, `time_limit: str or None = None`, `kb_ref: str`, `category: Literal["safety", "institutional", "criminal", "legal_aid", "national", "other"] = "other"` | Recommended legal forum, helpline, or authority |
 | `RoadmapAction` | `text: str`, `basis: Literal["kb", "general_guidance"]`, `kb_ref: str or None = None`, `time_limit: str or None = None` | Specific recommended action in the roadmap |
 | `RoadmapStep`   | `step: int`, `kind: Literal["immediate", "institutional", "legal"]`, `title: str`, `actions: list[RoadmapAction]` | Sequential milestone in the assistance roadmap |
-| `AskResult`     | `off_topic: bool`, `answer: str`, `verified: bool`, `fallback: bool`, `sources: list[Source]`, `disclaimer: str`, `resolved_query: str`, `cited_source_ids: list[str] = []`, `routing: list[Forum] = []`, `needs_info: list[str] = []`, `roadmap: list[RoadmapStep] = []` | Pipeline output |
+| `AskResult`     | `off_topic: bool`, `answer: str`, `verified: bool`, `fallback: bool`, `sources: list[Source]`, `disclaimer: str`, `resolved_query: str`, `cited_source_ids: list[str] = []`, `routing: list[Forum] = []`, `needs_info: list[str] = []`, `roadmap: list[RoadmapStep] = []`, `detected_lang: str = "en"`, `response_lang: str = "en"`, `answer_en: str or None = None`, `translation_verified: bool or None = None` | Pipeline output |
 | `DraftRequest`  | `narrative: str`, `recipient: Literal["SHO", "ICC", "LCC", "Protection Officer"] or None = None`, `details: dict[str, str] = {}` | Complaint / petition drafting input request |
 | `DraftField`    | `key: str`, `label: str`, `value: str`, `is_placeholder: bool`, `source: Literal["user_form", "user_text", "placeholder"]` | Structured field metadata for complaint template |
 | `DraftResult`   | `recipient: str`, `recipient_title: str`, `subject: str`, `fields: list[DraftField]`, `body: str`, `missing_fields: list[str]`, `notes: list[str]`, `references: list[str]`, `disclaimer: str` | Complete draft complaint / petition with placeholders |
@@ -173,6 +173,19 @@ FastAPI (or any Python) backend.
 }
 ```
 
+### Multilingual Support (Hindi & Hinglish)
+- **Supported Languages**: English (`"en"`), Hindi in Devanagari script (`"hi"`), and Romanized Hindi (`"hinglish"`).
+- `AskRequest.response_lang`: `"auto"` (default), `"en"`, `"hi"`, or `"hinglish"`. When `"auto"`, the pipeline matches the detected language of the query.
+- **New `AskResult` fields**:
+  - `detected_lang`: Detected language of the query (`"en"`, `"hi"`, or `"hinglish"`).
+  - `response_lang`: Language the `answer` is actually returned in.
+  - `answer_en`: English original answer (`str | None`), populated whenever the answer is translated into Hindi or Hinglish.
+  - `translation_verified`: `True` if translated answer passed verification (`[S#]` multiset equality, number preservation, and script checks), `False` if translation failed verification (reverting to English), or `None` for English answers.
+- **Routing & Roadmap in English**: Forum recommendations (`routing`) and sequential milestones (`roadmap`) remain in English for institutional consistency.
+- **UI "Show English original" toggle**: The UI should offer an intuitive toggle switch using `answer_en` so users can easily inspect the verified English source text alongside the Hindi or Hinglish translation.
+- **Drafting Support**: Non-English narratives in `DraftRequest` are translated into English for recipient determination and routing, but the complainant's narrative is preserved verbatim in the body of the generated letter. Form fields without English equivalents remain placeholders.
+- **Latency Impact**: Answering in Hindi or Hinglish introduces one extra LLM translation call (~5 to 15 s).
+
 ---
 
 ## 2. Response Status Flow
@@ -240,6 +253,7 @@ CPU-bound search (embeddings, BM25) and blocking HTTP calls to Ollama. A plain `
 runs in FastAPI's external threadpool, preventing blocking of the async event loop.
 
 ```python
+from typing import Literal
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -257,11 +271,12 @@ app = FastAPI(lifespan=lifespan)
 class AskRequest(BaseModel):
     query: str
     history: list[Turn] = []
+    response_lang: Literal["auto", "en", "hi", "hinglish"] = "auto"
 
 @app.post("/api/ask", response_model=AskResult)
 def ask(req: AskRequest):
     try:
-        return get_pipeline().ask(req.query, req.history or None)
+        return get_pipeline().ask(req.query, req.history or None, response_lang=req.response_lang)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -303,6 +318,7 @@ The generation module applies strict automated verification (`verify_answer`):
 | First `get_pipeline()` call | 3–5 s (loads embeddings + ChromaDB) |
 | Retrieval (`retrieve()`) | 50–200 ms |
 | LLM generation (Ollama, `llama3`) | 5–30 s (with `keep_alive: "30m"`, timeout 120s) |
+| Translation (Hindi/Hinglish) | 5–15 s (adds ~1 extra LLM call) |
 
 - The first call to Ollama may take slightly longer while the model weights are loaded into memory. With `"keep_alive": "30m"`, subsequent requests keep the model warm.
 - Off-topic queries skip LLM generation entirely and return in < 200 ms.

@@ -13,6 +13,7 @@ from schemas import DraftRequest, DraftField, DraftResult
 from routing import route, ICC_TIME_LIMIT, LCC_TIME_LIMIT
 from retrieval import retrieve
 from pipeline import DISCLAIMER
+from lang import detect_language, translate_to_english
 
 logger = logging.getLogger("draft")
 
@@ -232,11 +233,18 @@ def build_draft(req: DraftRequest, search=None, llm=None) -> DraftResult:
                 )
             sanitized_details[k] = collapsed
 
+    # Translate narrative for routing/retrieval if not English
+    routing_narrative = narrative
+    if detect_language(narrative) != "en":
+        translated = translate_to_english(narrative, llm=llm)
+        if translated:
+            routing_narrative = translated
+
     # Retrieval (when search is given)
     results = []
     if search is not None:
         try:
-            ret_data = retrieve(search, narrative)
+            ret_data = retrieve(search, routing_narrative)
             results = ret_data.get("results", [])
         except Exception:
             results = []
@@ -249,7 +257,7 @@ def build_draft(req: DraftRequest, search=None, llm=None) -> DraftResult:
         recipient = req.recipient
     else:
         chosen_by_routing = True
-        forums, _ = route(narrative, results)
+        forums, _ = route(routing_narrative, results)
         names = [f.name for f in forums]
         has_icc = any(n.startswith("Internal Complaints Committee") for n in names)
         has_lcc = any(n.startswith("Local Complaints Committee") for n in names)

@@ -52,6 +52,10 @@ class AskResult(BaseModel):
     routing: list[Forum] = []
     needs_info: list[str] = []
     roadmap: list[RoadmapStep] = []
+    detected_lang: str = "en"
+    response_lang: str = "en"
+    answer_en: str | None = None
+    translation_verified: bool | None = None
 
 
 class DraftRequest(BaseModel):
