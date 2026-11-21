@@ -145,16 +145,47 @@ def test_scenario_leakage_check():
     query = "my boss keeps touching me at work"
 
     # Bad answer mentioning 'dupatta'
-    bad_ans = "Your boss adjusting your dupatta is considered sexual harassment [S1]."
+    bad_ans = "Your boss touching your dupatta is considered sexual harassment [S1]."
     ok, reason = verify_answer(bad_ans, 2, source_texts, query=query)
     assert ok is False, "Expected answer mentioning dupatta to fail scenario leakage"
-    assert reason == "Answer uses details from an illustrative example.", f"Got: {reason!r}"
+    assert reason == "Answer uses details from an illustrative example: 'dupatta'.", f"Got: {reason!r}"
 
     # Clean answer
     clean_ans = "Unwelcome touching at work can constitute sexual harassment under Section 3 [S2]."
     ok, reason = verify_answer(clean_ans, 2, source_texts, query=query)
     assert ok is True, f"Expected clean answer to pass scenario leakage, got: {reason!r}"
     print("  [PASS] scenario leakage check fails on 'dupatta' and passes on clean answer")
+
+
+def test_section_mention_support_check():
+    """Section mention check: tests for Section 175(3), table cells, Section 124 vs 12, 12 weeks."""
+    # answer "Section 175(3)" with a source row "| ... | 173(4) (...), then 175(3) (Magistrate) |" passes
+    src_table = ["| ... | 173(4) (...), then 175(3) (Magistrate) |"]
+    ans_175_3 = "You can apply under Section 175(3) [S1] to the Magistrate."
+    ok, reason = verify_answer(ans_175_3, 1, src_table)
+    assert ok is True, f"Expected Section 175(3) to pass, got: {reason!r}"
+
+    # answer "Section 175" with no source containing 175 fails
+    src_no_175 = ["Section 85 — Cruelty by husband"]
+    ans_175 = "You can apply under Section 175 [S1] to the Magistrate."
+    ok, reason = verify_answer(ans_175, 1, src_no_175)
+    assert ok is False, "Expected Section 175 to fail"
+    assert reason == "Mentioned 'Section 175' does not appear in any source.", f"Got: {reason!r}"
+
+    # answer "Section 12" with only "Section 124" in the sources still fails
+    src_124 = ["Section 124 — Assault or criminal force to woman"]
+    ans_12 = "You have rights under Section 12 [S1]."
+    ok, reason = verify_answer(ans_12, 1, src_124)
+    assert ok is False, "Expected Section 12 with only Section 124 to fail"
+    assert reason == "Mentioned 'Section 12' does not appear in any source.", f"Got: {reason!r}"
+
+    # answer "Section 12" with only "12 weeks" in the sources fails
+    src_12_weeks = ["A woman is entitled to 12 weeks of leave."]
+    ok, reason = verify_answer(ans_12, 1, src_12_weeks)
+    assert ok is False, "Expected Section 12 with only '12 weeks' to fail"
+    assert reason == "Mentioned 'Section 12' does not appear in any source.", f"Got: {reason!r}"
+
+    print("  [PASS] section mention check supports 175(3), rejects 124/12 weeks, fails absent sections")
 
 
 def run():
@@ -177,7 +208,8 @@ def run():
         test_advice_phrases_check()
         test_definition_attribution_check()
         test_scenario_leakage_check()
-        passed += 4
+        test_section_mention_support_check()
+        passed += 5
     except AssertionError as e:
         print(f"  [FAIL] Additional test failed: {e}")
         failed += 1

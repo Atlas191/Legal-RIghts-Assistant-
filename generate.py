@@ -1,11 +1,12 @@
 """LLM generation module using local Ollama.
 Answers legal questions using only retrieved sources, with citation verification and fallback."""
 import logging
+import os
 import re
 import time
 import requests
 
-OLLAMA_MODEL = "llama3"
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3")
 OLLAMA_URL = "http://localhost:11434/api/chat"
 
 logger = logging.getLogger("generate")
@@ -116,11 +117,35 @@ def verify_answer(answer_text, n_sources, source_texts, query=""):
     all_sources_lower = all_sources_text.lower()
     answer_lower = answer_text.lower()
 
-    # c) Fails if answer mentions 'Section <number><optional letter>' not in sources
-    section_mentions = re.findall(r"\bSection\s+\d+[A-Za-z]?\b", answer_text, re.I)
-    for sec in section_mentions:
-        if not re.search(re.escape(sec) + r"(?![0-9A-Za-z])", all_sources_text, re.I):
-            return False, f"Mentioned '{sec}' does not appear in any source."
+    # c) Fails if answer mentions 'Section <number><optional letter>' not supported in sources
+    # A mention "Section <n><letters>" is supported if ANY source text contains, case-insensitive
+    # and with no alphanumeric character directly before or after the matched token:
+    # "Section <n>" or "Sections <n>" or "s.<n>" or "<n>(" (e.g. 175(3)) or a markdown table cell "| <n>" / "<n> |".
+    # A bare number elsewhere (such as "12 weeks") must NOT count.
+    section_mentions = re.finditer(r"\bSections?\s+(\d+[A-Za-z]?(?:\([0-9A-Za-z]+\))?)", answer_text, re.I)
+    for m in section_mentions:
+        sec_str = m.group(0)
+        token = m.group(1)
+        base_m = re.match(r"^(\d+[A-Za-z]?)", token)
+        base_n = base_m.group(1) if base_m else token
+        tokens_to_check = [token] if token == base_n else [token, base_n]
+        supported = False
+        for tok in tokens_to_check:
+            esc = re.escape(tok)
+            pat = (
+                r"(?i)(?:"
+                r"(?<![0-9A-Za-z])Sections?\s+" + esc + r"(?![0-9A-Za-z])|"
+                r"(?<![0-9A-Za-z])s\.\s*" + esc + r"(?![0-9A-Za-z])|"
+                r"(?<![0-9A-Za-z])" + esc + r"\(|"
+                r"\|\s*" + esc + r"(?![0-9A-Za-z])|"
+                r"(?<![0-9A-Za-z])" + esc + r"\s*\|"
+                r")"
+            )
+            if re.search(pat, all_sources_text):
+                supported = True
+                break
+        if not supported:
+            return False, f"Mentioned '{sec_str}' does not appear in any source."
 
     # 1. Advice phrases: if lowercase answer contains advice phrase not in any source text
     for phrase in ADVICE_PHRASES:
@@ -147,7 +172,7 @@ def verify_answer(answer_text, n_sources, source_texts, query=""):
 
     # 3. Scenario leakage: for each source marked ILLUSTRATIVE EXAMPLE, take its lowercase words of
     #    6 or more letters that appear in no non-scenario source and not in query; if answer contains any
-    #    -> fail "Answer uses details from an illustrative example."
+    #    -> fail "Answer uses details from an illustrative example: '<word>'."
     scenario_sources = []
     non_scenario_texts = []
     for heading, text, raw in source_items:
@@ -168,8 +193,10 @@ def verify_answer(answer_text, n_sources, source_texts, query=""):
             sc_words.discard("scenario")
             leak_candidates = {w for w in sc_words if w not in non_scenario_words and w not in query_words}
             answer_words = set(re.findall(r"\b[a-z]{6,}\b", answer_lower))
-            if leak_candidates & answer_words:
-                return False, "Answer uses details from an illustrative example."
+            leaked = leak_candidates & answer_words
+            if leaked:
+                offending_word = sorted(list(leaked))[0]
+                return False, f"Answer uses details from an illustrative example: '{offending_word}'."
 
     return True, ""
 
