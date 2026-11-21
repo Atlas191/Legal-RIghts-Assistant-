@@ -26,7 +26,10 @@ SYSTEM_PROMPT = (
     "5. If the sources do not cover something, explicitly say so.\n"
     "6. Never invent section numbers, deadlines, penalties, or authorities not present in the sources.\n"
     "7. Do not include any legal disclaimer (the application adds it automatically).\n"
-    "8. Say exactly who is directed to do what. If a source says the court can direct the respondent to do something, say the court can direct him; never turn an order against the respondent into something the woman must do."
+    "8. Say exactly who is directed to do what. If a source says the court can direct the respondent to do something, say the court can direct him; never turn an order against the respondent into something the woman must do.\n"
+    "9. Use 'can' or 'may' for what a court or authority is able to do. Never promise an outcome: do not write that the woman 'will be protected', 'will be provided' or that 'the court will' do something.\n"
+    "10. Do not give advice that is not in the sources (for example 'consult a lawyer' or 'contact a helpline'); next steps are added separately by the application.\n"
+    "11. Attribute each provision only to the source that contains it. Do not say a section defines or provides something unless that source says so."
 )
 
 
