@@ -69,6 +69,36 @@ TEST_CASES = [
         "expected": [],
         "expect_off_topic": True,
     },
+    {
+        "query": "pan card kaise banwayein",
+        "expected": [],
+        "expect_off_topic": True,
+    },
+    {
+        "query": "bank account kaise kholein",
+        "expected": [],
+        "expect_off_topic": True,
+    },
+    {
+        "query": "income tax return kaise bharein",
+        "expected": [],
+        "expect_off_topic": True,
+    },
+    {
+        "query": "photo edit kaise karein",
+        "expected": [],
+        "expect_off_topic": True,
+    },
+    {
+        "query": "cricket match ka score kya hai",
+        "expected": [],
+        "expect_off_topic": True,
+    },
+    {
+        "query": "mujhe loan chahiye",
+        "expected": [],
+        "expect_off_topic": True,
+    },
 ]
 
 
@@ -81,6 +111,7 @@ def run_checks():
     search = pipe.search
 
     table_rows = []
+    leaked = []
     all_passed = True
 
     for item in TEST_CASES:
@@ -95,12 +126,22 @@ def run_checks():
 
         ret = retrieve(search, search_query)
         off_topic = ret["off_topic"]
+        best_dist = float(ret.get("best_dist", 0.0))
+        max_bm25 = float(ret.get("max_bm25", 0.0))
         results = ret.get("results", [])
         first_heading = results[0]["heading"] if results else "None"
         first_act = results[0]["act"] if results else ""
 
         if expect_off_topic:
             status = "PASS" if off_topic else "FAIL"
+            if not off_topic:
+                leaked.append({
+                    "query": q,
+                    "trans": trans,
+                    "best_dist": best_dist,
+                    "max_bm25": max_bm25,
+                    "heading": f"{first_heading} ({first_act})" if first_act else first_heading,
+                })
         else:
             matches_expected = any(
                 exp.lower() in first_heading.lower() or exp.lower() in first_act.lower()
@@ -116,18 +157,32 @@ def run_checks():
             "lang": lang,
             "trans": trans[:80],
             "off_topic": off_topic,
+            "best_dist": best_dist,
+            "max_bm25": max_bm25,
             "heading": f"{first_heading} ({first_act})" if first_act else first_heading,
             "status": status,
         })
 
     # Print markdown table
-    print(f"\n| {'Query':<45} | {'Lang':<8} | {'Translation (first 80 chars)':<35} | {'Off Topic':<10} | {'Status':<6} | First Heading |")
-    print(f"|{'-'*47}|{'-'*10}|{'-'*37}|{'-'*12}|{'-'*8}|{'-'*30}|")
+    print(f"\n| {'Query':<36} | {'Lang':<8} | {'Translation (first 80)':<30} | {'Off Topic':<9} | {'Dist':<6} | {'BM25':<6} | {'Status':<6} | First Heading |")
+    print(f"|{'-'*38}|{'-'*10}|{'-'*32}|{'-'*11}|{'-'*8}|{'-'*8}|{'-'*8}|{'-'*30}|")
     for row in table_rows:
-        q_disp = row["query"] if len(row["query"]) <= 43 else row["query"][:40] + "..."
-        trans_disp = row["trans"] if len(row["trans"]) <= 33 else row["trans"][:30] + "..."
+        q_disp = row["query"] if len(row["query"]) <= 34 else row["query"][:31] + "..."
+        trans_disp = row["trans"] if len(row["trans"]) <= 28 else row["trans"][:25] + "..."
         head_disp = row["heading"] if len(row["heading"]) <= 35 else row["heading"][:32] + "..."
-        print(f"| {q_disp:<45} | {row['lang']:<8} | {trans_disp:<35} | {str(row['off_topic']):<10} | {row['status']:<6} | {head_disp} |")
+        print(f"| {q_disp:<36} | {row['lang']:<8} | {trans_disp:<30} | {str(row['off_topic']):<9} | {row['best_dist']:<6.3f} | {row['max_bm25']:<6.2f} | {row['status']:<6} | {head_disp} |")
+
+    if leaked:
+        print("\n" + "=" * 80)
+        print("LEAKED OFF-TOPIC QUERIES (Distance and BM25):")
+        print("=" * 80)
+        for item in leaked:
+            print(f"- Query:       {item['query']!r}")
+            print(f"  Translation: {item['trans']!r}")
+            print(f"  best_dist:   {item['best_dist']:.4f}")
+            print(f"  max_bm25:    {item['max_bm25']:.4f}")
+            print(f"  Heading:     {item['heading']}")
+            print("-" * 60)
 
     print("\n" + "=" * 100)
     print("END-TO-END PIPELINE RUNS (2 QUERIES)")

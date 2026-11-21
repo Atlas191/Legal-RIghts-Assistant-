@@ -12,10 +12,14 @@ from unittest.mock import patch, MagicMock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
+from schemas import Turn
 from lang import (
     detect_language,
     glossary_keywords,
     verify_translation,
+    _strip_preamble,
+    translate_answer,
+    translate_previous_turn,
     OFF_TOPIC,
     DISCLAIMER,
     UNAVAILABLE,
@@ -111,7 +115,61 @@ def test_verify_translation():
     # Good Hinglish
     good_hinglish = "Section 3 [S1] ke tehat aapko 3 months [S2] tak protection mil sakti hai."
     assert verify_translation(src_en, good_hinglish, "hinglish") is True
+
+    # Output containing "90" when source has no 90 fails verify_translation
+    invented_90 = "धारा 3 [S1] के तहत, आपके पास 90 महीने [S2] के लिए संरक्षण आदेश हैं।"
+    assert verify_translation(src_en, invented_90, "hi") is False
     print("PASS: test_verify_translation")
+
+
+def test_strip_preamble_and_verified():
+    """A translation starting with 'Here is the translation:' is cleaned and still verified."""
+    src_en = "Under Section 3 [S1], you have protection orders for 3 months [S2]."
+    raw_hi = (
+        "Here is the translation:\n"
+        "धारा 3 [S1] के तहत, आपके पास 3 महीने [S2] के लिए संरक्षण आदेश हैं।\n"
+        "Note: consult a legal professional."
+    )
+    cleaned = _strip_preamble(raw_hi)
+    assert not cleaned.lower().startswith("here is"), "Preamble was not dropped"
+    assert "note:" not in cleaned.lower(), "Trailing note was not dropped"
+    assert verify_translation(src_en, cleaned, "hi") is True
+
+    # Test that translate_answer strips preamble before returning
+    mock_llm = MagicMock(return_value=raw_hi)
+    trans = translate_answer(src_en, "hi", llm=mock_llm)
+    assert trans is not None
+    assert not trans.lower().startswith("here is")
+    assert verify_translation(src_en, trans, "hi") is True
+    print("PASS: test_strip_preamble_and_verified")
+
+
+def test_follow_up_translator_cache():
+    """A follow-up asks the previous-turn translator once for two identical previous turns."""
+    pipe = _make_pipeline()
+    translate_previous_turn.cache_clear()
+
+    prev_turn = Turn(role="user", text="मेरे पति मुझे मारते हैं")
+    mock_prev_trans = MagicMock(return_value="my husband beats me")
+
+    mock_gen = MagicMock(return_value={
+        "answer": "You can seek protection orders under Section 3 [S1].",
+        "citations": ["pwdva_2005:sec-3"],
+        "verified": True,
+        "fallback": False,
+    })
+
+    with patch("lang.translate_to_english", mock_prev_trans), \
+         patch("pipeline.generate_answer", mock_gen):
+        # Query 1: follow-up under 8 words in English
+        pipe.ask("what to do", history=[prev_turn])
+        # Query 2: identical previous turn
+        pipe.ask("where to go", history=[prev_turn])
+
+    assert mock_prev_trans.call_count == 1, (
+        f"Expected translator to be called once for identical previous turn, got {mock_prev_trans.call_count}"
+    )
+    print("PASS: test_follow_up_translator_cache")
 
 
 def test_pipeline_hindi_query():
@@ -245,6 +303,8 @@ TESTS = [
     test_detect_language_golden_en,
     test_glossary_keywords,
     test_verify_translation,
+    test_strip_preamble_and_verified,
+    test_follow_up_translator_cache,
     test_pipeline_hindi_query,
     test_pipeline_translation_drops_s1,
     test_pipeline_hindi_off_topic,

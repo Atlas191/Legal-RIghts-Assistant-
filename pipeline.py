@@ -13,6 +13,7 @@ from roadmap import build_roadmap
 from lang import (
     detect_language,
     translate_to_english,
+    translate_previous_turn,
     translate_answer,
     verify_translation,
     glossary_keywords,
@@ -116,7 +117,7 @@ class LegalPipeline:
                 prev_text = prev_user_turns[-1].text.strip()
                 prev_lang = detect_language(prev_text)
                 if prev_lang != "en":
-                    prev_trans = translate_to_english(prev_text)
+                    prev_trans = translate_previous_turn(prev_text)
                     prev_en = prev_trans if prev_trans else ""
                     prev_kws = glossary_keywords(prev_text)
                     if prev_kws:

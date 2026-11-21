@@ -2,6 +2,7 @@
 Privacy rule: never log query text, translations or answers (counts and timings only).
 """
 from collections import Counter
+import functools
 import logging
 import os
 import re
@@ -250,6 +251,36 @@ def glossary_keywords(text: str) -> list[str]:
     return list(dict.fromkeys(found))
 
 
+def _strip_preamble(text: str) -> str:
+    """Drop LLM conversational preamble and trailing notes.
+
+    If the first line (case-insensitive) starts with 'here is', 'here's', 'translation',
+    'english translation', 'sure', 'note:' or ends with ':' and there is more text after it,
+    drop that first line; also drop a trailing line starting with 'note:' or '(note'.
+    """
+    if not text or not text.strip():
+        return text
+
+    lines = text.strip().splitlines()
+    if not lines:
+        return text
+
+    first_line_clean = lines[0].strip().lower()
+    prefixes = ("here is", "here's", "translation", "english translation", "sure", "note:")
+    if (first_line_clean.startswith(prefixes) or first_line_clean.endswith(":")) and len(lines) > 1:
+        if any(line.strip() for line in lines[1:]):
+            lines = lines[1:]
+            while lines and not lines[0].strip():
+                lines.pop(0)
+
+    while lines and lines[-1].strip().lower().startswith(("note:", "(note")):
+        lines.pop()
+        while lines and not lines[-1].strip():
+            lines.pop()
+
+    return "\n".join(lines).strip()
+
+
 def translate_to_english(text: str, llm=None) -> str | None:
     """Translate a Hindi/Hinglish query into English.
 
@@ -282,8 +313,7 @@ def translate_to_english(text: str, llm=None) -> str | None:
     if not raw or not isinstance(raw, str):
         return None
 
-    out = raw.strip()
-    out = re.sub(r"^(translation|english translation):\s*", "", out, flags=re.I).strip()
+    out = _strip_preamble(raw)
     out = out.strip('"\'')
     if not out:
         return None
@@ -298,6 +328,19 @@ def translate_to_english(text: str, llm=None) -> str | None:
         return None
 
     return out
+
+
+@functools.lru_cache(maxsize=128)
+def translate_previous_turn(text: str) -> str | None:
+    """Bounded in-memory cache for translating previous turn text in follow-up queries.
+
+    Never logged or written to disk.
+    """
+    return translate_to_english(text)
+
+
+translate_turn_to_english = translate_previous_turn
+cached_translate_to_english = translate_previous_turn
 
 
 def translate_answer(text_en: str, target: str, llm=None) -> str | None:
@@ -338,7 +381,9 @@ def translate_answer(text_en: str, target: str, llm=None) -> str | None:
     if not raw or not isinstance(raw, str):
         return None
 
-    return raw.strip()
+    out = _strip_preamble(raw)
+    out = out.strip('"\'')
+    return out if out else None
 
 
 def verify_translation(src_en: str, out: str, target: str) -> bool:
@@ -347,6 +392,7 @@ def verify_translation(src_en: str, out: str, target: str) -> bool:
     - out is non-empty.
     - [S#] markers match exactly (same multiset).
     - every ASCII digit sequence in src_en appears in out.
+    - no invented numbers: every ASCII digit sequence in out appears in src_en.
     - for 'hi' at least 30% of the letters are Devanagari.
     - for 'hinglish' there are no Devanagari characters.
     """
@@ -360,9 +406,16 @@ def verify_translation(src_en: str, out: str, target: str) -> bool:
         return False
 
     # 2. Every ASCII digit sequence in src_en appears in out
-    digits = re.findall(r"\d+", src_en)
-    for d in digits:
+    src_digits = re.findall(r"\d+", src_en)
+    out_digits = re.findall(r"\d+", out)
+    for d in src_digits:
         if d not in out:
+            return False
+
+    # No invented numbers: every ASCII digit sequence in out must appear in src_en
+    src_digit_set = set(src_digits)
+    for d in out_digits:
+        if d not in src_digit_set:
             return False
 
     # 3. Script validation
