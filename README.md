@@ -338,6 +338,18 @@ python tests/test_routing.py
 
 ---
 
+## 🌐 Multilingual Support (Hindi & Hinglish)
+
+- **Input Language Understanding**: The system supports queries written in English, Hindi (Devanagari script), and Romanized Hindi (Hinglish). Hindi and Hinglish queries are translated and enriched with statutory glossary terms for retrieval.
+- **English Answers by Default**: Queries in Hindi or Hinglish are understood and answered in English by default.
+- **Fixed System Messages**: Refusal responses for out-of-scope queries (`OFF_TOPIC`) and statutory disclaimer messages (`DISCLAIMER`) are provided as fixed, verified text across English, Hindi, and Hinglish.
+- **Experimental Answer Translation (`ANSWER_TRANSLATION=on`)**:
+  - Translating generated answers into Hindi or Hinglish is **experimental and opt-in** via `ANSWER_TRANSLATION=on`.
+  - In testing, small local LLMs produced unreliable Hindi translations; citation and number verification can verify structural integrity (`[S#]` tags and numbers) but **cannot detect semantic distortions or incorrect legal meanings**.
+  - Furthermore, generated English explanations may also misread complex provisions (automated verification only checks citation markers and section numbers). **The statutory source chunks displayed directly beneath the answer are always the authoritative and reliable part of every response.**
+
+---
+
 ## ⚖️ Disclaimer
 
 *This application is an educational prototype developed as a college capstone project. It provides general legal information and statutory mapping based on official gazette notifications and government handbooks, not personalized legal advice. In situations involving immediate danger or domestic emergencies, please dial the national emergency response number **112** or the Women Helpline **1091**.*

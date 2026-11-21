@@ -175,16 +175,22 @@ FastAPI (or any Python) backend.
 
 ### Multilingual Support (Hindi & Hinglish)
 - **Supported Languages**: English (`"en"`), Hindi in Devanagari script (`"hi"`), and Romanized Hindi (`"hinglish"`).
-- `AskRequest.response_lang`: `"auto"` (default), `"en"`, `"hi"`, or `"hinglish"`. When `"auto"`, the pipeline matches the detected language of the query.
-- **New `AskResult` fields**:
+- **Default Behavior**: Hindi and Hinglish queries are understood and answered in English by default (`response_lang: "en"`).
+- **Fixed Strings**: Refusal (`OFF_TOPIC`) and disclaimer (`DISCLAIMER`) messages in Hindi and Hinglish use verified, static fixed strings.
+- **Experimental Answer Translation (`ANSWER_TRANSLATION=on`)**:
+  - Translating the generated legal answer into Hindi or Hinglish is **opt-in and experimental** (enabled only when the environment variable `ANSWER_TRANSLATION` is set to `"on"`, `"1"`, or `"true"`).
+  - Small local models produce unreliable Hindi in practice; automated verification checks citation markers (`[S#]`) and section numbers, but **cannot detect semantic distortions or incorrect legal meanings**.
+  - Similarly, the generated English answer can also misread a source (verification validates citations and numeric sequences only), so the **statutory sources returned alongside the answer are always the authoritative and reliable part**.
+- `AskRequest.response_lang`: `"auto"` (default), `"en"`, `"hi"`, or `"hinglish"`.
+- **`AskResult` Language Fields**:
   - `detected_lang`: Detected language of the query (`"en"`, `"hi"`, or `"hinglish"`).
-  - `response_lang`: Language the `answer` is actually returned in.
-  - `answer_en`: English original answer (`str | None`), populated whenever the answer is translated into Hindi or Hinglish.
-  - `translation_verified`: `True` if translated answer passed verification (`[S#]` multiset equality, number preservation, and script checks), `False` if translation failed verification (reverting to English), or `None` for English answers.
+  - `response_lang`: Language the `answer` is actually returned in (remains `"en"` when `ANSWER_TRANSLATION=off`).
+  - `answer_en`: English original answer (`str | None`), populated only when answer translation is opted in and succeeds.
+  - `translation_verified`: `True` if translated answer passed verification, `False` if translation failed verification (reverting to English), or `None` when answer translation is disabled or the answer is in English.
 - **Routing & Roadmap in English**: Forum recommendations (`routing`) and sequential milestones (`roadmap`) remain in English for institutional consistency.
-- **UI "Show English original" toggle**: The UI should offer an intuitive toggle switch using `answer_en` so users can easily inspect the verified English source text alongside the Hindi or Hinglish translation.
+- **UI "Show English original" toggle**: If answer translation is enabled, the UI should offer an intuitive toggle switch using `answer_en` so users can easily inspect the verified English source text alongside the Hindi or Hinglish translation.
 - **Drafting Support**: Non-English narratives in `DraftRequest` are translated into English for recipient determination and routing, but the complainant's narrative is preserved verbatim in the body of the generated letter. Form fields without English equivalents remain placeholders.
-- **Latency Impact**: Answering in Hindi or Hinglish introduces one extra LLM translation call (~5 to 15 s).
+- **Latency Impact**: Enabling answer translation introduces one extra LLM translation call (~5 to 15 s).
 
 ---
 

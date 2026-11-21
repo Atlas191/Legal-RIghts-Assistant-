@@ -185,8 +185,11 @@ def run_checks():
             print("-" * 60)
 
     print("\n" + "=" * 100)
-    print("END-TO-END PIPELINE RUNS (2 QUERIES)")
+    print("END-TO-END PIPELINE RUNS (2 QUERIES, ANSWER_TRANSLATION=off)")
     print("=" * 100)
+
+    # Ensure answer translation is off by default
+    os.environ["ANSWER_TRANSLATION"] = "off"
 
     e2e_queries = [
         "मेरे पति मुझे मारते हैं और घर से निकाल दिया",
@@ -202,8 +205,9 @@ def run_checks():
         print(f"Time taken: {elapsed:.2f}s")
         print(f"Detected Lang: {res.detected_lang} | Response Lang: {res.response_lang}")
         print(f"Translation Verified: {res.translation_verified}")
-        print(f"\n[English Original Answer (answer_en)]:\n{res.answer_en}")
-        print(f"\n[Translated Answer (answer)]:\n{res.answer}")
+        print(f"\n[Answer (English by default)]:\n{res.answer}")
+        if res.answer_en is not None:
+            print(f"\n[English Original Answer (answer_en)]:\n{res.answer_en}")
         print(f"\n[Disclaimer]: {res.disclaimer}")
         print("-" * 80)
 

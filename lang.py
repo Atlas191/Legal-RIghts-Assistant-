@@ -2,6 +2,7 @@
 Privacy rule: never log query text, translations or answers (counts and timings only).
 """
 from collections import Counter
+import difflib
 import functools
 import logging
 import os
@@ -386,17 +387,34 @@ def translate_answer(text_en: str, target: str, llm=None) -> str | None:
     return out if out else None
 
 
+def answer_translation_enabled() -> bool:
+    """Check if answer translation is opted in via environment variable ANSWER_TRANSLATION.
+
+    Reads os.environ at call time so runtime updates take effect immediately.
+    """
+    return os.environ.get("ANSWER_TRANSLATION", "off").lower() in ("on", "1", "true")
+
+
 def verify_translation(src_en: str, out: str, target: str) -> bool:
     """Verify translated answer preserves citations, numbers, and script integrity.
 
     - out is non-empty.
+    - fails when output (lowercased, whitespace collapsed) equals src_en or SequenceMatcher ratio >= 0.9.
     - [S#] markers match exactly (same multiset).
     - every ASCII digit sequence in src_en appears in out.
     - no invented numbers: every ASCII digit sequence in out appears in src_en.
     - for 'hi' at least 30% of the letters are Devanagari.
-    - for 'hinglish' there are no Devanagari characters.
+    - for 'hinglish': no Devanagari, at least 10% HINGLISH_MARKERS tokens, and >= 5 distinct markers.
     """
     if not out or not out.strip():
+        return False
+
+    # Prevent echoed English
+    src_en_normalised = " ".join(src_en.lower().split())
+    out_normalised = " ".join(out.lower().split())
+    if out_normalised == src_en_normalised:
+        return False
+    if difflib.SequenceMatcher(None, src_en_normalised, out_normalised).ratio() >= 0.9:
         return False
 
     # 1. Exact match of [S#] markers (multiset)
@@ -428,6 +446,13 @@ def verify_translation(src_en: str, out: str, target: str) -> bool:
             return False
     elif target == "hinglish":
         if re.search(r"[\u0900-\u097F]", out):
+            return False
+        tokens = [w for w in re.findall(r"[a-zA-Z]+", out.lower())]
+        if not tokens:
+            return False
+        distinct_markers = set(tokens) & HINGLISH_MARKERS
+        marker_count = sum(1 for t in tokens if t in HINGLISH_MARKERS)
+        if len(distinct_markers) < 5 or (marker_count / len(tokens)) < 0.10:
             return False
 
     return True

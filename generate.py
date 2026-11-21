@@ -25,7 +25,8 @@ SYSTEM_PROMPT = (
     "4. Put the source citation [S#] (e.g. [S1], [S2]) immediately after each legal claim or fact stated.\n"
     "5. If the sources do not cover something, explicitly say so.\n"
     "6. Never invent section numbers, deadlines, penalties, or authorities not present in the sources.\n"
-    "7. Do not include any legal disclaimer (the application adds it automatically)."
+    "7. Do not include any legal disclaimer (the application adds it automatically).\n"
+    "8. Say exactly who is directed to do what. If a source says the court can direct the respondent to do something, say the court can direct him; never turn an order against the respondent into something the woman must do."
 )
 
 

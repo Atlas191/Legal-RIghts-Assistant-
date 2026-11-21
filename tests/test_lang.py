@@ -112,8 +112,8 @@ def test_verify_translation():
     hinglish_with_dev = "Dhara 3 [S1] ke tehat 3 महीने [S2] ke liye orders hain."
     assert verify_translation(src_en, hinglish_with_dev, "hinglish") is False
 
-    # Good Hinglish
-    good_hinglish = "Section 3 [S1] ke tehat aapko 3 months [S2] tak protection mil sakti hai."
+    # Good Hinglish (with >= 5 distinct markers from HINGLISH_MARKERS)
+    good_hinglish = "Section 3 [S1] ke tehat aapko 3 months [S2] tak ghar se pati nikal nahi sakta hai."
     assert verify_translation(src_en, good_hinglish, "hinglish") is True
 
     # Output containing "90" when source has no 90 fails verify_translation
@@ -172,58 +172,128 @@ def test_follow_up_translator_cache():
     print("PASS: test_follow_up_translator_cache")
 
 
+def test_verify_translation_echoed_and_plausible_hinglish():
+    """Echoed English fails verify_translation for hinglish; plausible Hinglish passes."""
+    src_en = "Under Section 3 [S1], you have rights for 3 months."
+
+    # 1. Exact echoed English fails
+    assert verify_translation(src_en, src_en, "hinglish") is False
+
+    # 2. Near-echoed English (ratio >= 0.9) fails
+    near_echo = "Under Section 3 [S1], you have legal rights for 3 months."
+    assert verify_translation(src_en, near_echo, "hinglish") is False
+
+    # 3. Hand-written plausible Hinglish with >= 5 marker words, same [S1] and numbers passes
+    # Markers present: "ke", "ghar", "se", "pati", "nikal", "nahi", "hai" (at least 5 from HINGLISH_MARKERS)
+    plausible_hinglish = "Section 3 [S1] ke tehat aapko 3 months tak ghar se pati nikal nahi sakta hai."
+    assert verify_translation(src_en, plausible_hinglish, "hinglish") is True
+    print("PASS: test_verify_translation_echoed_and_plausible_hinglish")
+
+
 def test_pipeline_hindi_query():
-    """Pipeline with mocked translator/generator on Hindi DV query."""
+    """Pipeline with mocked translator/generator on Hindi DV query (ANSWER_TRANSLATION=on)."""
     pipe = _make_pipeline()
-    mock_trans_en = "my husband beats me and threw me out of the house"
-    mock_gen_return = {
-        "answer": "Under Section 3 [S1], domestic violence includes physical abuse.",
-        "citations": ["pwdva_2005:sec-3"],
-        "verified": True,
-        "fallback": False,
-    }
-    mock_trans_hi = "धारा 3 [S1] के तहत घरेलू हिंसा में शारीरिक शोषण शामिल है।"
+    old_env = os.environ.get("ANSWER_TRANSLATION")
+    os.environ["ANSWER_TRANSLATION"] = "on"
+    try:
+        mock_trans_en = "my husband beats me and threw me out of the house"
+        mock_gen_return = {
+            "answer": "Under Section 3 [S1], domestic violence includes physical abuse.",
+            "citations": ["pwdva_2005:sec-3"],
+            "verified": True,
+            "fallback": False,
+        }
+        mock_trans_hi = "धारा 3 [S1] के तहत घरेलू हिंसा में शारीरिक शोषण शामिल है।"
 
-    with patch("pipeline.translate_to_english", return_value=mock_trans_en), \
-         patch("pipeline.generate_answer", return_value=mock_gen_return), \
-         patch("pipeline.translate_answer", return_value=mock_trans_hi):
-        result = pipe.ask("मेरे पति मुझे मारते हैं और घर से निकाल दिया")
+        with patch("pipeline.translate_to_english", return_value=mock_trans_en), \
+             patch("pipeline.generate_answer", return_value=mock_gen_return), \
+             patch("pipeline.translate_answer", return_value=mock_trans_hi):
+            result = pipe.ask("मेरे पति मुझे मारते हैं और घर से निकाल दिया")
 
-    assert result.off_topic is False
-    assert result.detected_lang == "hi"
-    assert result.response_lang == "hi"
-    assert any("pwdva" in s.id or "pwdva" in s.source_file for s in result.sources), "pwdva section expected"
-    assert result.answer == mock_trans_hi
-    assert result.answer_en == mock_gen_return["answer"]
-    assert result.translation_verified is True
-    assert result.disclaimer == DISCLAIMER["hi"]
-    print("PASS: test_pipeline_hindi_query")
+        assert result.off_topic is False
+        assert result.detected_lang == "hi"
+        assert result.response_lang == "hi"
+        assert any("pwdva" in s.id or "pwdva" in s.source_file for s in result.sources), "pwdva section expected"
+        assert result.answer == mock_trans_hi
+        assert result.answer_en == mock_gen_return["answer"]
+        assert result.translation_verified is True
+        assert result.disclaimer == DISCLAIMER["hi"]
+        print("PASS: test_pipeline_hindi_query")
+    finally:
+        if old_env is not None:
+            os.environ["ANSWER_TRANSLATION"] = old_env
+        else:
+            os.environ.pop("ANSWER_TRANSLATION", None)
 
 
 def test_pipeline_translation_drops_s1():
-    """Pipeline when translated answer drops [S1] keeps English answer and sets translation_verified=False."""
+    """Pipeline when translated answer drops [S1] keeps English answer and sets translation_verified=False (ANSWER_TRANSLATION=on)."""
     pipe = _make_pipeline()
-    mock_trans_en = "my husband beats me"
-    mock_gen_return = {
-        "answer": "Under Section 3 [S1], you can seek protection.",
-        "citations": ["pwdva_2005:sec-3"],
-        "verified": True,
-        "fallback": False,
-    }
-    mock_trans_hi_bad = "धारा 3 के तहत आप सुरक्षा मांग सकती हैं।"  # Missing [S1]
+    old_env = os.environ.get("ANSWER_TRANSLATION")
+    os.environ["ANSWER_TRANSLATION"] = "on"
+    try:
+        mock_trans_en = "my husband beats me"
+        mock_gen_return = {
+            "answer": "Under Section 3 [S1], you can seek protection.",
+            "citations": ["pwdva_2005:sec-3"],
+            "verified": True,
+            "fallback": False,
+        }
+        mock_trans_hi_bad = "धारा 3 के तहत आप सुरक्षा मांग सकती हैं।"  # Missing [S1]
 
-    with patch("pipeline.translate_to_english", return_value=mock_trans_en), \
-         patch("pipeline.generate_answer", return_value=mock_gen_return), \
-         patch("pipeline.translate_answer", return_value=mock_trans_hi_bad):
-        result = pipe.ask("मेरे पति मुझे मारते हैं")
+        with patch("pipeline.translate_to_english", return_value=mock_trans_en), \
+             patch("pipeline.generate_answer", return_value=mock_gen_return), \
+             patch("pipeline.translate_answer", return_value=mock_trans_hi_bad):
+            result = pipe.ask("मेरे पति मुझे मारते हैं")
 
-    assert result.off_topic is False
-    assert result.answer == mock_gen_return["answer"]
-    assert result.answer_en is None
-    assert result.translation_verified is False
-    assert result.response_lang == "en"
-    assert result.disclaimer == DISCLAIMER["en"]
-    print("PASS: test_pipeline_translation_drops_s1")
+        assert result.off_topic is False
+        assert result.answer == mock_gen_return["answer"]
+        assert result.answer_en is None
+        assert result.translation_verified is False
+        assert result.response_lang == "en"
+        assert result.disclaimer == DISCLAIMER["en"]
+        print("PASS: test_pipeline_translation_drops_s1")
+    finally:
+        if old_env is not None:
+            os.environ["ANSWER_TRANSLATION"] = old_env
+        else:
+            os.environ.pop("ANSWER_TRANSLATION", None)
+
+
+def test_pipeline_answer_translation_flag_off():
+    """With ANSWER_TRANSLATION off, a Hindi query returns an English answer and translate_answer is never called."""
+    pipe = _make_pipeline()
+    old_env = os.environ.get("ANSWER_TRANSLATION")
+    os.environ["ANSWER_TRANSLATION"] = "off"
+    try:
+        mock_trans_en = "my husband beats me and threw me out of the house"
+        mock_gen_return = {
+            "answer": "Under Section 3 [S1], domestic violence includes physical abuse.",
+            "citations": ["pwdva_2005:sec-3"],
+            "verified": True,
+            "fallback": False,
+        }
+        mock_translate_answer = MagicMock()
+
+        with patch("pipeline.translate_to_english", return_value=mock_trans_en), \
+             patch("pipeline.generate_answer", return_value=mock_gen_return), \
+             patch("pipeline.translate_answer", mock_translate_answer):
+            result = pipe.ask("मेरे पति मुझे मारते हैं और घर से निकाल दिया")
+
+        assert result.off_topic is False
+        assert result.detected_lang == "hi"
+        assert result.response_lang == "en"
+        assert result.answer == mock_gen_return["answer"]
+        assert result.answer_en is None
+        assert result.translation_verified is None
+        assert result.disclaimer == DISCLAIMER["en"]
+        mock_translate_answer.assert_not_called()
+        print("PASS: test_pipeline_answer_translation_flag_off")
+    finally:
+        if old_env is not None:
+            os.environ["ANSWER_TRANSLATION"] = old_env
+        else:
+            os.environ.pop("ANSWER_TRANSLATION", None)
 
 
 def test_pipeline_hindi_off_topic():
@@ -303,10 +373,12 @@ TESTS = [
     test_detect_language_golden_en,
     test_glossary_keywords,
     test_verify_translation,
+    test_verify_translation_echoed_and_plausible_hinglish,
     test_strip_preamble_and_verified,
     test_follow_up_translator_cache,
     test_pipeline_hindi_query,
     test_pipeline_translation_drops_s1,
+    test_pipeline_answer_translation_flag_off,
     test_pipeline_hindi_off_topic,
     test_pipeline_translator_fails_no_glossary,
     test_privacy_logging_never_contains_query_or_answer,

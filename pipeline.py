@@ -16,6 +16,7 @@ from lang import (
     translate_previous_turn,
     translate_answer,
     verify_translation,
+    answer_translation_enabled,
     glossary_keywords,
     OFF_TOPIC,
     DISCLAIMER as LANG_DISCLAIMER,
@@ -181,7 +182,7 @@ class LegalPipeline:
         translation_verified: bool | None = None
         actual_resp_lang = "en"
 
-        if gen["verified"] and not gen["fallback"] and resp_lang != "en":
+        if gen["verified"] and not gen["fallback"] and resp_lang != "en" and answer_translation_enabled():
             translated = translate_answer(gen["answer"], resp_lang)
             if translated and verify_translation(gen["answer"], translated, resp_lang):
                 answer_text = translated
