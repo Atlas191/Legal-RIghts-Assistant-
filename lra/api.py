@@ -14,14 +14,14 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
-import generate
-import kb_utils
-import lang
-import pipeline
-from pipeline import get_pipeline
-from draft import build_draft
-from schemas import Turn, DraftRequest, DraftResult
-from api_schemas import (
+from lra.rag import generate
+from lra.rag import kb_utils
+from lra.language import lang
+from lra import pipeline
+from lra.pipeline import get_pipeline
+from lra.guidance.draft import build_draft
+from lra.schemas import Turn, DraftRequest, DraftResult
+from lra.api_schemas import (
     AskRequest,
     AskResponse,
     HealthResponse,
@@ -330,4 +330,4 @@ def draft_endpoint(req: DraftRequest, request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run("lra.api:app", host="127.0.0.1", port=8000, reload=False)

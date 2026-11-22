@@ -9,11 +9,11 @@ import sys
 from unittest.mock import patch, MagicMock
 
 # Ensure project root is on sys.path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
-from schemas import Turn
-from lang import (
+from lra.schemas import Turn
+from lra.language.lang import (
     detect_language,
     glossary_keywords,
     verify_translation,
@@ -24,8 +24,8 @@ from lang import (
     DISCLAIMER,
     UNAVAILABLE,
 )
-from pipeline import LegalPipeline
-from tests.run_golden import CASES
+from lra.pipeline import LegalPipeline
+from tests.eval.run_golden import CASES
 
 _search_fn = None
 
@@ -33,7 +33,7 @@ _search_fn = None
 def _get_search():
     global _search_fn
     if _search_fn is None:
-        from retrieval import load_search
+        from lra.rag.retrieval import load_search
         _search_fn = load_search()
     return _search_fn
 
@@ -159,8 +159,8 @@ def test_follow_up_translator_cache():
         "fallback": False,
     })
 
-    with patch("lang.translate_to_english", mock_prev_trans), \
-         patch("pipeline.generate_answer", mock_gen):
+    with patch("lra.language.lang.translate_to_english", mock_prev_trans), \
+         patch("lra.pipeline.generate_answer", mock_gen):
         # Query 1: follow-up under 8 words in English
         pipe.ask("what to do", history=[prev_turn])
         # Query 2: identical previous turn
@@ -205,9 +205,9 @@ def test_pipeline_hindi_query():
         }
         mock_trans_hi = "धारा 3 [S1] के तहत घरेलू हिंसा में शारीरिक शोषण शामिल है।"
 
-        with patch("pipeline.translate_to_english", return_value=mock_trans_en), \
-             patch("pipeline.generate_answer", return_value=mock_gen_return), \
-             patch("pipeline.translate_answer", return_value=mock_trans_hi):
+        with patch("lra.pipeline.translate_to_english", return_value=mock_trans_en), \
+             patch("lra.pipeline.generate_answer", return_value=mock_gen_return), \
+             patch("lra.pipeline.translate_answer", return_value=mock_trans_hi):
             result = pipe.ask("मेरे पति मुझे मारते हैं और घर से निकाल दिया")
 
         assert result.off_topic is False
@@ -241,9 +241,9 @@ def test_pipeline_translation_drops_s1():
         }
         mock_trans_hi_bad = "धारा 3 के तहत आप सुरक्षा मांग सकती हैं।"  # Missing [S1]
 
-        with patch("pipeline.translate_to_english", return_value=mock_trans_en), \
-             patch("pipeline.generate_answer", return_value=mock_gen_return), \
-             patch("pipeline.translate_answer", return_value=mock_trans_hi_bad):
+        with patch("lra.pipeline.translate_to_english", return_value=mock_trans_en), \
+             patch("lra.pipeline.generate_answer", return_value=mock_gen_return), \
+             patch("lra.pipeline.translate_answer", return_value=mock_trans_hi_bad):
             result = pipe.ask("मेरे पति मुझे मारते हैं")
 
         assert result.off_topic is False
@@ -275,9 +275,9 @@ def test_pipeline_answer_translation_flag_off():
         }
         mock_translate_answer = MagicMock()
 
-        with patch("pipeline.translate_to_english", return_value=mock_trans_en), \
-             patch("pipeline.generate_answer", return_value=mock_gen_return), \
-             patch("pipeline.translate_answer", mock_translate_answer):
+        with patch("lra.pipeline.translate_to_english", return_value=mock_trans_en), \
+             patch("lra.pipeline.generate_answer", return_value=mock_gen_return), \
+             patch("lra.pipeline.translate_answer", mock_translate_answer):
             result = pipe.ask("मेरे पति मुझे मारते हैं और घर से निकाल दिया")
 
         assert result.off_topic is False
@@ -301,7 +301,7 @@ def test_pipeline_hindi_off_topic():
     pipe = _make_pipeline()
     mock_trans_en = "how do I get a passport"
 
-    with patch("pipeline.translate_to_english", return_value=mock_trans_en):
+    with patch("lra.pipeline.translate_to_english", return_value=mock_trans_en):
         result = pipe.ask("पासपोर्ट कैसे बनवाएं")
 
     assert result.off_topic is True
@@ -317,7 +317,7 @@ def test_pipeline_translator_fails_no_glossary():
 
     # Query with Devanagari letters that do not match any glossary words
     devanagari_random = "कखग चछज"
-    with patch("pipeline.translate_to_english", return_value=None):
+    with patch("lra.pipeline.translate_to_english", return_value=None):
         result = pipe.ask(devanagari_random)
 
     assert result.off_topic is False
@@ -351,9 +351,9 @@ def test_privacy_logging_never_contains_query_or_answer():
     }
 
     try:
-        with patch("pipeline.translate_to_english", return_value=secret_translation), \
-             patch("pipeline.generate_answer", return_value=mock_gen_return), \
-             patch("pipeline.translate_answer", return_value=secret_answer_hi):
+        with patch("lra.pipeline.translate_to_english", return_value=secret_translation), \
+             patch("lra.pipeline.generate_answer", return_value=mock_gen_return), \
+             patch("lra.pipeline.translate_answer", return_value=secret_answer_hi):
             pipe.ask(secret_query)
     finally:
         p_logger.removeHandler(handler)

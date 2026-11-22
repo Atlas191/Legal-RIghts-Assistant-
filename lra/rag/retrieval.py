@@ -3,7 +3,7 @@ Returns structured results. No printing, no input() — pure data layer."""
 import re
 from collections import defaultdict
 from rank_bm25 import BM25Okapi
-from kb_utils import load_chunks, tokenize
+from lra.rag.kb_utils import load_chunks, tokenize
 
 DB_DIR = "./chroma_db"
 MAX_RESULTS = 3          # upper limit, not a target: fewer are shown when the rest are weak

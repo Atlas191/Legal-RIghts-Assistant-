@@ -5,12 +5,12 @@ import logging
 import re
 import time
 
-from schemas import Turn, Source, Forum, RoadmapAction, RoadmapStep, AskResult
-from retrieval import load_search, retrieve
-from generate import answer as generate_answer
-from routing import route
-from roadmap import build_roadmap
-from lang import (
+from lra.schemas import Turn, Source, Forum, RoadmapAction, RoadmapStep, AskResult
+from lra.rag.retrieval import load_search, retrieve
+from lra.rag.generate import answer as generate_answer
+from lra.guidance.routing import route
+from lra.guidance.roadmap import build_roadmap
+from lra.language.lang import (
     detect_language,
     translate_to_english,
     translate_previous_turn,

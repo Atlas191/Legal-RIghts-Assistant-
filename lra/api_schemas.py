@@ -2,7 +2,7 @@
 from typing import Literal
 from pydantic import BaseModel, Field
 
-from schemas import Turn, AskResult, DraftRequest, DraftField, DraftResult
+from lra.schemas import Turn, AskResult, DraftRequest, DraftField, DraftResult
 
 
 class AskRequest(BaseModel):

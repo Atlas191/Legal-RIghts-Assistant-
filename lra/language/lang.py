@@ -10,7 +10,7 @@ import re
 import time
 from typing import Callable
 
-from generate import _call_ollama, OLLAMA_MODEL
+from lra.rag.generate import _call_ollama, OLLAMA_MODEL
 
 logger = logging.getLogger("lang")
 

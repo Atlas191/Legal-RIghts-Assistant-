@@ -3,9 +3,9 @@ import os
 import sys
 
 # Ensure project root is on sys.path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from generate import build_context, verify_answer
+from lra.rag.generate import build_context, verify_answer
 
 TEST_CASES = [
     (

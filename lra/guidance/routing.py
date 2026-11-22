@@ -4,7 +4,7 @@ Decides applicable forums based on the query text and retrieved section metadata
 Returns tuple[list[Forum], list[str]].
 """
 import re
-from schemas import Forum
+from lra.schemas import Forum
 
 # Forum definitions
 LCC_TIME_LIMIT = (

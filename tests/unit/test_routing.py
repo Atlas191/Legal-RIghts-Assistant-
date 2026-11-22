@@ -6,9 +6,9 @@ import os
 import sys
 
 # Ensure project root is on sys.path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from routing import route
+from lra.guidance.routing import route
 
 ICC_NAME = "Internal Complaints Committee (ICC)"
 LCC_NAME = "Local Complaints Committee (LCC)"

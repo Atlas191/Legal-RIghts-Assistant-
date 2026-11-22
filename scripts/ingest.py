@@ -1,8 +1,10 @@
 """Build the ChromaDB index from knowledge_base/*.md. Run again after any edit to the .md files."""
+import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import shutil
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
-from kb_utils import load_chunks
+from lra.rag.kb_utils import load_chunks
 
 DB_DIR = "./chroma_db"
 

@@ -6,12 +6,12 @@ import os
 import sys
 
 # Ensure project root is on sys.path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from schemas import Forum, RoadmapAction, RoadmapStep
-from routing import route
-from roadmap import build_roadmap
-from pipeline import LegalPipeline
+from lra.schemas import Forum, RoadmapAction, RoadmapStep
+from lra.guidance.routing import route
+from lra.guidance.roadmap import build_roadmap
+from lra.pipeline import LegalPipeline
 
 
 def test_case_1_workplace_40_people():

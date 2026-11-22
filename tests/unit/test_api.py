@@ -9,13 +9,13 @@ import sys
 from unittest.mock import patch
 
 # Ensure project root is on sys.path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 os.environ["WARM_OLLAMA"] = "0"
 
 from fastapi.testclient import TestClient
 
-from schemas import Turn, Source, Forum, RoadmapAction, RoadmapStep, AskResult
-import api
+from lra.schemas import Turn, Source, Forum, RoadmapAction, RoadmapStep, AskResult
+import lra.api as api
 
 
 # --- Fake Pipeline for offline testing ---

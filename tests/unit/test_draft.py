@@ -9,10 +9,10 @@ import re
 import sys
 
 # Ensure project root is on sys.path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from schemas import DraftRequest, DraftResult, DraftField
-from draft import build_draft, FIELD_SPECS
+from lra.schemas import DraftRequest, DraftResult, DraftField
+from lra.guidance.draft import build_draft, FIELD_SPECS
 
 
 # ---------------------------------------------------------------------------

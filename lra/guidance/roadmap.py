@@ -3,7 +3,7 @@ Pure Python rules, no LLM, no network.
 Returns list[RoadmapStep].
 """
 import re
-from schemas import Forum, RoadmapAction, RoadmapStep
+from lra.schemas import Forum, RoadmapAction, RoadmapStep
 
 GENERAL_GUIDANCE_SUFFIX = " (general guidance, not a legal requirement)"
 

@@ -9,11 +9,11 @@ import sys
 from unittest.mock import patch, MagicMock
 
 # Ensure project root is on sys.path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
-from schemas import Turn, AskResult
-from pipeline import LegalPipeline, get_pipeline, DISCLAIMER
+from lra.schemas import Turn, AskResult
+from lra.pipeline import LegalPipeline, get_pipeline, DISCLAIMER
 
 
 # ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@ def _get_search():
     """Load the real search engine once across all tests."""
     global _search_fn
     if _search_fn is None:
-        from retrieval import load_search
+        from lra.rag.retrieval import load_search
         _search_fn = load_search()
     return _search_fn
 
@@ -52,7 +52,7 @@ MOCK_GEN_RETURN = {
 def test_on_topic_returns_sources_and_disclaimer():
     """On-topic query returns sources, cited IDs, routing, and a disclaimer."""
     pipe = _make_pipeline()
-    with patch("pipeline.generate_answer", return_value=MOCK_GEN_RETURN):
+    with patch("lra.pipeline.generate_answer", return_value=MOCK_GEN_RETURN):
         result = pipe.ask("my husband beats me")
     assert isinstance(result, AskResult)
     assert not result.off_topic
@@ -71,7 +71,7 @@ def test_off_topic_no_ollama():
     """Off-topic query returns off_topic=True with no Ollama call, empty routing."""
     pipe = _make_pipeline()
     mock_gen = MagicMock()
-    with patch("pipeline.generate_answer", mock_gen):
+    with patch("lra.pipeline.generate_answer", mock_gen):
         result = pipe.ask("capital of india")
     assert result.off_topic is True
     assert result.sources == []
@@ -90,7 +90,7 @@ def test_follow_up_resolution():
         Turn(role="user", text="my husband beats me"),
         Turn(role="assistant", text="Here are relevant sections..."),
     ]
-    with patch("pipeline.generate_answer", return_value=MOCK_GEN_RETURN):
+    with patch("lra.pipeline.generate_answer", return_value=MOCK_GEN_RETURN):
         result = pipe.ask("can they demand dowry money", history=history)
     assert result.resolved_query == "my husband beats me can they demand dowry money"
     return True
@@ -103,7 +103,7 @@ def test_lookup_query_skips_follow_up():
         Turn(role="user", text="my husband beats me"),
         Turn(role="assistant", text="Here are relevant sections..."),
     ]
-    with patch("pipeline.generate_answer", return_value=MOCK_GEN_RETURN):
+    with patch("lra.pipeline.generate_answer", return_value=MOCK_GEN_RETURN):
         result = pipe.ask("498A", history=history)
     assert result.resolved_query == "498A"
     return True
@@ -116,7 +116,7 @@ def test_follow_up_joins_and_reroutes_workplace():
         Turn(role="user", text="my boss keeps touching me at work"),
         Turn(role="assistant", text="Here are the relevant provisions..."),
     ]
-    with patch("pipeline.generate_answer", return_value=MOCK_GEN_RETURN):
+    with patch("lra.pipeline.generate_answer", return_value=MOCK_GEN_RETURN):
         result = pipe.ask("we are 40 people", history=history)
 
     assert "my boss keeps touching me at work" in result.resolved_query
@@ -135,7 +135,7 @@ def test_statute_lookups_skip_join():
         Turn(role="user", text="my boss keeps touching me at work"),
         Turn(role="assistant", text="Here are the relevant provisions..."),
     ]
-    with patch("pipeline.generate_answer", return_value=MOCK_GEN_RETURN):
+    with patch("lra.pipeline.generate_answer", return_value=MOCK_GEN_RETURN):
         for query in ["498A", "66E", "section 85"]:
             result = pipe.ask(query, history=history)
             assert result.resolved_query == query, (
@@ -179,7 +179,7 @@ def test_logs_do_not_contain_query_text():
     logger = logging.getLogger("pipeline")
     logger.addHandler(handler)
 
-    with patch("pipeline.generate_answer", return_value=MOCK_GEN_RETURN):
+    with patch("lra.pipeline.generate_answer", return_value=MOCK_GEN_RETURN):
         pipe.ask(test_query)
 
     logger.removeHandler(handler)

@@ -24,7 +24,56 @@ The system indexes **11 knowledge base files** located in `./knowledge_base/`:
 - `maternity_benefit_act.md`: Maternity Benefit Act, 1961 & 2017 Amendment (26 weeks leave, work from home, unlawful dismissal protection).
 - `ncw_charter.md`: National Commission for Women Citizen's Charter (Inquiry mandates and grievance redressal).
 
-When indexed via `python ingest.py`, these 11 files produce **135 sections** which are chunked into **165 child chunks** stored in `./chroma_db`.
+When indexed via `python scripts/ingest.py`, these 11 files produce **135 sections** which are chunked into **165 child chunks** stored in `./chroma_db`.
+
+---
+
+## 📁 Project Structure
+
+```
+Legal-Rights-Assistant/
+├── lra/                      # Core application package
+│   ├── __init__.py
+│   ├── api.py               # FastAPI application, middleware, and route handlers
+│   ├── api_schemas.py       # Pydantic v2 schemas for API requests and responses
+│   ├── schemas.py           # Core domain schemas (Turn, Source, Forum, AskResult, etc.)
+│   ├── pipeline.py          # Pipeline coordinator & stateless orchestrator
+│   ├── rag/                 # RAG retrieval and generation subsystem
+│   │   ├── __init__.py
+│   │   ├── kb_utils.py      # Front-matter parser, tokenizer, and document chunker
+│   │   ├── retrieval.py     # Hybrid dense (ChromaDB) + BM25Okapi retrieval engine
+│   │   └── generate.py      # Local Ollama generation with verify_answer guardrails
+│   ├── guidance/            # Procedural routing, roadmap, and draft generation
+│   │   ├── __init__.py
+│   │   ├── routing.py       # Deterministic forum and helpline routing rules
+│   │   ├── roadmap.py       # Ordered 3-tier actionable roadmap builder
+│   │   └── draft.py         # Deterministic legal petition and complaint drafting
+│   └── language/            # Multilingual support subsystem
+│       ├── __init__.py
+│       └── lang.py          # Script detection, Hinglish markers, and translation verification
+├── scripts/                 # CLI entry points and administrative scripts
+│   ├── ingest.py            # Knowledge base indexing script
+│   └── demo.py              # Interactive terminal query demo
+├── tests/                   # Automated test suites
+│   ├── unit/                # Unit tests for individual subsystems
+│   │   ├── test_api.py
+│   │   ├── test_draft.py
+│   │   ├── test_generate.py
+│   │   ├── test_lang.py
+│   │   ├── test_pipeline.py
+│   │   ├── test_roadmap.py
+│   │   └── test_routing.py
+│   └── eval/                # Evaluation and regression suites
+│       ├── run_golden.py
+│       ├── check_hindi.py
+│       └── smoke_demo.py
+├── knowledge_base/          # Statutory provisions and official handbooks (11 markdown files)
+├── docs/                    # Technical and integration documentation
+│   └── INTEGRATION.md
+├── chroma_db/               # Local ChromaDB persistent vector index
+├── requirements.txt         # Project dependencies
+└── README.md
+```
 
 ---
 
@@ -32,16 +81,16 @@ When indexed via `python ingest.py`, these 11 files produce **135 sections** whi
 
 The application is structured into modular Python components:
 
-- **`schemas.py`**: Defines the shared, immutable data contracts using Pydantic models. It standardizes conversation turns (`Turn`), retrieved statutory sources (`Source`), forum authorities (`Forum`), procedural milestones (`RoadmapStep`, `RoadmapAction`), request/response payloads (`AskRequest`, `AskResult`), and structured complaints (`DraftRequest`, `DraftField`, `DraftResult`).
-- **`kb_utils.py`**: Handles parsing and chunking of the 11 statutory markdown files. It extracts YAML front-matter metadata (law, act, chapter, keywords, formerly IPC) into parent sections, splits long provisions into overlapping child chunks (chunk size 700 characters, overlap 100 characters), tokenizes text for lexical search, and appends statutory metadata lines (`Formerly IPC: <val>`) to ensure penal cross-references are searchable.
-- **`ingest.py`**: The one-time indexing pipeline. It parses the knowledge base files with `kb_utils`, generates dense semantic vector embeddings using local `BAAI/bge-small-en-v1.5` via HuggingFace, and populates the local ChromaDB vector store (`./chroma_db`) with 135 parent sections and 165 child chunks.
-- **`retrieval.py`**: Executes hybrid search combining dense semantic embeddings (ChromaDB) and sparse lexical search (`BM25Okapi`). Rankings over child chunks are merged using Reciprocal Rank Fusion (RRF $k=60$) aggregated to parent sections, and results pass through multi-tier distance and token-length guardrails with regex exemptions for direct statute lookups (e.g. `498A`, `BNS 78`).
-- **`routing.py`**: Evaluates the user query and retrieved legal sources to identify competent forums and authorities categorized into safety (`181`, `112`), institutional (`ICC`, `LCC`, `PWDVA Protection Officer`), criminal (`Police/FIR`, `SP/Magistrate`, `cybercrime`), legal aid (`DLSA`), and national (`NCW`). It applies deterministic rules (e.g. workplace headcount $\ge 10$ routes to ICC, $<10$ routes to LCC) and flags clarification questions when headcount is unknown.
-- **`roadmap.py`**: Synthesizes an ordered, three-tier procedural roadmap (Immediate steps, Institutional remedies, and Formal legal action). Each step specifies basis-tagged actions (`kb` vs `general_guidance`) linked to relevant statutory source IDs and statutory time limits (e.g. POSH 3-month filing window).
-- **`draft.py`**: Implements deterministic, offline generation of formal complaint letters addressed to SHO, ICC, LCC, or Protection Officers. It extracts incident dates, times, places, designations, and names from the narrative without logging user text, populates user-provided form fields, and leaves missing fields as standardized bracketed placeholders.
-- **`lang.py`**: Manages multilingual understanding across English, Devanagari Hindi, and Romanized Hindi (Hinglish). It enriches non-English queries with statutory glossary keywords for retrieval, provides static verified refusal and disclaimer strings, and manages opt-in answer translation with strict structural verification (`[S#]` multiset equality, number preservation, echo detection, and Hinglish marker density).
-- **`generate.py`**: Interfaces with the local Ollama LLM (`llama3`), building prompt contexts where scenarios are explicitly marked as illustrative examples. Generated explanations must pass `verify_answer`, which enforces citation presence (`[S#]`), active source ranges, section-mention support (via explicit section, subclause, or table cell matching), blocking of common advice phrases, and scenario detail leakage prevention before permitting answer return.
-- **`pipeline.py`**: Coordinates the entire workflow via `LegalPipeline`. It manages language detection, translation, follow-up conversation joins, hybrid retrieval, forum routing, procedural roadmaps, and verified generation into a single unified `AskResult`.
+- **`lra/schemas.py`**: Defines the shared, immutable data contracts using Pydantic models. It standardizes conversation turns (`Turn`), retrieved statutory sources (`Source`), forum authorities (`Forum`), procedural milestones (`RoadmapStep`, `RoadmapAction`), request/response payloads (`AskRequest`, `AskResult`), and structured complaints (`DraftRequest`, `DraftField`, `DraftResult`).
+- **`lra/rag/kb_utils.py`**: Handles parsing and chunking of the 11 statutory markdown files. It extracts YAML front-matter metadata (law, act, chapter, keywords, formerly IPC) into parent sections, splits long provisions into overlapping child chunks (chunk size 700 characters, overlap 100 characters), tokenizes text for lexical search, and appends statutory metadata lines (`Formerly IPC: <val>`) to ensure penal cross-references are searchable.
+- **`scripts/ingest.py`**: The one-time indexing pipeline. It parses the knowledge base files with `kb_utils`, generates dense semantic vector embeddings using local `BAAI/bge-small-en-v1.5` via HuggingFace, and populates the local ChromaDB vector store (`./chroma_db`) with 135 parent sections and 165 child chunks.
+- **`lra/rag/retrieval.py`**: Executes hybrid search combining dense semantic embeddings (ChromaDB) and sparse lexical search (`BM25Okapi`). Rankings over child chunks are merged using Reciprocal Rank Fusion (RRF $k=60$) aggregated to parent sections, and results pass through multi-tier distance and token-length guardrails with regex exemptions for direct statute lookups (e.g. `498A`, `BNS 78`).
+- **`lra/guidance/routing.py`**: Evaluates the user query and retrieved legal sources to identify competent forums and authorities categorized into safety (`181`, `112`), institutional (`ICC`, `LCC`, `PWDVA Protection Officer`), criminal (`Police/FIR`, `SP/Magistrate`, `cybercrime`), legal aid (`DLSA`), and national (`NCW`). It applies deterministic rules (e.g. workplace headcount $\ge 10$ routes to ICC, $<10$ routes to LCC) and flags clarification questions when headcount is unknown.
+- **`lra/guidance/roadmap.py`**: Synthesizes an ordered, three-tier procedural roadmap (Immediate steps, Institutional remedies, and Formal legal action). Each step specifies basis-tagged actions (`kb` vs `general_guidance`) linked to relevant statutory source IDs and statutory time limits (e.g. POSH 3-month filing window).
+- **`lra/guidance/draft.py`**: Implements deterministic, offline generation of formal complaint letters addressed to SHO, ICC, LCC, or Protection Officers. It extracts incident dates, times, places, designations, and names from the narrative without logging user text, populates user-provided form fields, and leaves missing fields as standardized bracketed placeholders.
+- **`lra/language/lang.py`**: Manages multilingual understanding across English, Devanagari Hindi, and Romanized Hindi (Hinglish). It enriches non-English queries with statutory glossary keywords for retrieval, provides static verified refusal and disclaimer strings, and manages opt-in answer translation with strict structural verification (`[S#]` multiset equality, number preservation, echo detection, and Hinglish marker density).
+- **`lra/rag/generate.py`**: Interfaces with the local Ollama LLM (`llama3`), building prompt contexts where scenarios are explicitly marked as illustrative examples. Generated explanations must pass `verify_answer`, which enforces citation presence (`[S#]`), active source ranges, section-mention support (via explicit section, subclause, or table cell matching), blocking of common advice phrases, and scenario detail leakage prevention before permitting answer return.
+- **`lra/pipeline.py`**: Coordinates the entire workflow via `LegalPipeline`. It manages language detection, translation, follow-up conversation joins, hybrid retrieval, forum routing, procedural roadmaps, and verified generation into a single unified `AskResult`.
 
 ---
 
@@ -85,26 +134,26 @@ ollama pull llama3
 ```
 
 ### 3. Build the Vector Index
-Run `ingest.py` to index the 11 knowledge base files into ChromaDB:
+Run `scripts/ingest.py` to index the 11 knowledge base files into ChromaDB:
 ```bash
-python ingest.py
+python scripts/ingest.py
 ```
 *Output: `135 sections -> 165 child chunks` indexed into `./chroma_db`.*
 
 ### 4. Interactive CLI Application
 Run the interactive console demo:
 ```bash
-python demo.py
+python scripts/demo.py
 ```
 To run with local LLM answer generation:
 ```bash
-python demo.py --llm
+python scripts/demo.py --llm
 ```
 
 ### 5. FastAPI Web Service (API)
 Start the production FastAPI application:
 ```bash
-uvicorn api:app --port 8000
+uvicorn lra.api:app --host 127.0.0.1 --port 8000
 ```
 Access interactive Swagger UI documentation at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 
@@ -130,31 +179,31 @@ The project is verified by automated test suites:
 
 | Test Suite | File | Count | Status | Description |
 |---|---|---|---|---|
-| **Language & Translation** | `tests/test_lang.py` | **14 / 14** | PASS | Script detection, Hinglish marker density, echo rejection, opt-in flag. |
-| **Draft Generation** | `tests/test_draft.py` | **17 / 17** | PASS | SHO/ICC/LCC templates, placeholder validation, entity extraction. |
-| **Roadmap Generation** | `tests/test_roadmap.py` | **8 / 8** | PASS | Three-tier procedural roadmap, basis tagging, time limits. |
-| **Legal Forum Routing** | `tests/test_routing.py` | **15 / 15** | PASS | Category routing, headcount-based ICC/LCC rules, clarification questions. |
-| **Pipeline Integration** | `tests/test_pipeline.py` | **9 / 9** | PASS | Stateless orchestration, follow-up joins, statute bypass, privacy logging. |
-| **Answer Verification** | `tests/test_generate.py` | **13 / 13** | PASS | Core citation validation, section checking, advice & leakage rejection. |
-| **FastAPI Layer** | `tests/test_api.py` | **13 / 13** | PASS | Endpoints, session TTL, CORS, privacy logging, 503 semaphore, OpenAPI. |
-| **Golden Regression** | `tests/run_golden.py` | **31 / 33 (2 known failures: bank account, pan card)** | 2 known | 31 passed, 2 known off-topic leaks (`bank account`, `pan card`). |
-| **Smoke Demo (End-to-End)**| `tests/smoke_demo.py` | **8 / 8** | PASS | Live Ollama evaluation table, follow-up resolution, draft generation. |
+| **Language & Translation** | `tests/unit/test_lang.py` | **14 / 14** | PASS | Script detection, Hinglish marker density, echo rejection, opt-in flag. |
+| **Draft Generation** | `tests/unit/test_draft.py` | **17 / 17** | PASS | SHO/ICC/LCC templates, placeholder validation, entity extraction. |
+| **Roadmap Generation** | `tests/unit/test_roadmap.py` | **8 / 8** | PASS | Three-tier procedural roadmap, basis tagging, time limits. |
+| **Legal Forum Routing** | `tests/unit/test_routing.py` | **15 / 15** | PASS | Category routing, headcount-based ICC/LCC rules, clarification questions. |
+| **Pipeline Integration** | `tests/unit/test_pipeline.py` | **9 / 9** | PASS | Stateless orchestration, follow-up joins, statute bypass, privacy logging. |
+| **Answer Verification** | `tests/unit/test_generate.py` | **13 / 13** | PASS | Core citation validation, section checking, advice & leakage rejection. |
+| **FastAPI Layer** | `tests/unit/test_api.py` | **13 / 13** | PASS | Endpoints, session TTL, CORS, privacy logging, 503 semaphore, OpenAPI. |
+| **Golden Regression** | `tests/eval/run_golden.py` | **31 / 33 (2 known failures: bank account, pan card)** | 2 known | 31 passed, 2 known off-topic leaks (`bank account`, `pan card`). |
+| **Smoke Demo (End-to-End)**| `tests/eval/smoke_demo.py` | **8 / 8** | PASS | Live Ollama evaluation table, follow-up resolution, draft generation. |
 
 Run all unit tests:
 ```bash
-python tests/test_lang.py
-python tests/test_draft.py
-python tests/test_roadmap.py
-python tests/test_routing.py
-python tests/test_pipeline.py
-python tests/test_generate.py
-python tests/test_api.py
-python tests/run_golden.py
+python tests/unit/test_lang.py
+python tests/unit/test_draft.py
+python tests/unit/test_roadmap.py
+python tests/unit/test_routing.py
+python tests/unit/test_pipeline.py
+python tests/unit/test_generate.py
+python tests/unit/test_api.py
+python tests/eval/run_golden.py
 ```
 
 Run the end-to-end smoke demo against local Ollama:
 ```bash
-python tests/smoke_demo.py
+python tests/eval/smoke_demo.py
 ```
 
 ---

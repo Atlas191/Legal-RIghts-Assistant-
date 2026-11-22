@@ -5,7 +5,7 @@ FastAPI (or any Python) backend.
 
 ---
 
-## 1. Schemas (`schemas.py`)
+## 1. Schemas (`lra/schemas.py`)
 
 | Model           | Fields | Description |
 |-----------------|--------|-------------|
@@ -216,8 +216,8 @@ else:
 ## 3. Pipeline API
 
 ```python
-from pipeline import get_pipeline
-from schemas import Turn
+from lra.pipeline import get_pipeline
+from lra.schemas import Turn
 
 pipe = get_pipeline()          # cached singleton; first call loads embeddings & ChromaDB (~3-5 s)
 result = pipe.ask("my husband beats me")
@@ -252,12 +252,12 @@ result = pipe.ask(
 
 ---
 
-## 4. FastAPI API Layer (`api.py`)
+## 4. FastAPI API Layer (`lra/api.py`)
 
-A full production FastAPI layer is implemented in `api.py` (with request/response models in `api_schemas.py`).
+A full production FastAPI layer is implemented in `lra/api.py` (with request/response models in `lra/api_schemas.py`).
 To run the server:
 ```bash
-uvicorn api:app --host 127.0.0.1 --port 8000
+uvicorn lra.api:app --host 127.0.0.1 --port 8000
 ```
 Interactive Swagger documentation is available at `http://127.0.0.1:8000/docs`.
 

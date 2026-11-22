@@ -9,11 +9,11 @@ import sys
 import time
 
 # Ensure project root is on sys.path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from pipeline import get_pipeline
-from schemas import Turn, DraftRequest
-from draft import build_draft
+from lra.pipeline import get_pipeline
+from lra.schemas import Turn, DraftRequest
+from lra.guidance.draft import build_draft
 
 
 def main():

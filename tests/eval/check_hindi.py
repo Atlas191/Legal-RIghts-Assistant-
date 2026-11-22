@@ -6,12 +6,12 @@ import os
 import sys
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
-from lang import detect_language, translate_to_english, glossary_keywords
-from pipeline import get_pipeline
-from retrieval import retrieve
+from lra.language.lang import detect_language, translate_to_english, glossary_keywords
+from lra.pipeline import get_pipeline
+from lra.rag.retrieval import retrieve
 
 TEST_CASES = [
     {

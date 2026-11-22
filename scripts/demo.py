@@ -1,9 +1,10 @@
 """Hybrid retrieval demo — CLI front-end.
 Shows only results that are actually relevant, and politely refuses off-topic questions.
 Optional --llm flag enables plain-language answer generation with citation verification."""
-import sys
+import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import textwrap
-from retrieval import load_search, retrieve
+from lra.rag.retrieval import load_search, retrieve
 
 DEBUG = True             # True prints the scores behind each decision
 
@@ -57,7 +58,7 @@ def show(result, llm_res=None):
 if __name__ == "__main__":
     use_llm = "--llm" in sys.argv
     if use_llm:
-        from generate import answer
+        from lra.rag.generate import answer
 
     search = load_search()
 

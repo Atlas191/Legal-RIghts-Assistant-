@@ -5,10 +5,10 @@ Exit code 0 = all pass, 1 = at least one failure.
 import os, sys
 
 # Ensure the project root is on sys.path so imports work from tests/
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
-from retrieval import load_search, retrieve
+from lra.rag.retrieval import load_search, retrieve
 
 # (query, expect, substring_or_None)
 # expect = "refuse"  -> off_topic must be True
