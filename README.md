@@ -40,7 +40,7 @@ The application is structured into modular Python components:
 - **`roadmap.py`**: Synthesizes an ordered, three-tier procedural roadmap (Immediate steps, Institutional remedies, and Formal legal action). Each step specifies basis-tagged actions (`kb` vs `general_guidance`) linked to relevant statutory source IDs and statutory time limits (e.g. POSH 3-month filing window).
 - **`draft.py`**: Implements deterministic, offline generation of formal complaint letters addressed to SHO, ICC, LCC, or Protection Officers. It extracts incident dates, times, places, designations, and names from the narrative without logging user text, populates user-provided form fields, and leaves missing fields as standardized bracketed placeholders.
 - **`lang.py`**: Manages multilingual understanding across English, Devanagari Hindi, and Romanized Hindi (Hinglish). It enriches non-English queries with statutory glossary keywords for retrieval, provides static verified refusal and disclaimer strings, and manages opt-in answer translation with strict structural verification (`[S#]` multiset equality, number preservation, echo detection, and Hinglish marker density).
-- **`generate.py`**: Interfaces with the local Ollama LLM (`llama3`), building prompt contexts where scenarios are explicitly marked as illustrative examples. Generated explanations must pass `verify_answer`, which enforces citation presence (`[S#]`), active source ranges, section-mention support (via explicit section, subclause, or table cell matching), absence of ungrounded advice, and scenario detail leakage prevention before permitting answer return.
+- **`generate.py`**: Interfaces with the local Ollama LLM (`llama3`), building prompt contexts where scenarios are explicitly marked as illustrative examples. Generated explanations must pass `verify_answer`, which enforces citation presence (`[S#]`), active source ranges, section-mention support (via explicit section, subclause, or table cell matching), blocking of common advice phrases, and scenario detail leakage prevention before permitting answer return.
 - **`pipeline.py`**: Coordinates the entire workflow via `LegalPipeline`. It manages language detection, translation, follow-up conversation joins, hybrid retrieval, forum routing, procedural roadmaps, and verified generation into a single unified `AskResult`.
 
 ---
@@ -54,12 +54,13 @@ The application is structured into modular Python components:
 
 ## ⚠️ Known Limitations
 
-1. **Off-Topic Retrieval Leakage**: Two off-topic financial queries (`"how to open a bank account"` and `"how to apply for a pan card online"`) leak through retrieval gates because their common vocabulary tokens match ancillary bank-account and application clauses in PWDVA monetary relief and NALSA legal aid texts.
-2. **Local Model Translation Quality**: Small local LLMs (such as 3.2B / 8B parameter models) frequently mistranslate complex Hindi and Hinglish queries, and citation/number verification cannot verify semantic legal correctness. Consequently, answer translation into Hindi/Hinglish is **off by default** (`ANSWER_TRANSLATION=off`).
-3. **Potential LLM Misinterpretation**: Generated English answers can occasionally misread a statutory source because automated verification checks citation tags `[S#]`, numbers, and section references, but cannot verify semantic legal precision. **The retrieved source chunks shown beneath the answer are always the authoritative and reliable part of every response.**
-4. **English-Only Routing and Roadmaps**: Forum recommendations (`routing`) and procedural steps (`roadmap`) remain in English for institutional consistency.
-5. **Knowledge Base Verification Status**: Certain knowledge base clauses marked with `"verify"` were compiled from general legal knowledge and administrative summaries and must be formally verified against official India Code gazette notifications.
-6. **Educational Prototype / Not Legal Advice**: This software is an educational prototype developed as a college capstone project. It provides statutory mappings and informational guidance only, not formal legal advice or attorney-client representation. In emergencies, users must dial **112** or the Women Helpline **181** / **1091**.
+- two off-topic queries still leak ("how to open a bank account", "how to apply for a pan card online")
+- only citation markers and section numbers are verified, not meaning; the advice check blocks a short list of common phrases only, so a written answer can still be incomplete, overstated or add details
+- retrieval can miss the best source (for example POSH quid pro quo for "manager asks for sexual favours in return for a promotion"); the sources shown under each answer are the reliable part
+- small local models mistranslate some Hinglish queries; Hindi answer translation is off by default
+- routing and roadmap text are English-only
+- knowledge-base chunks marked "verify" were written from general knowledge and must be checked against India Code
+- general information only, not legal advice
 
 ---
 
@@ -113,8 +114,8 @@ The project is verified by automated test suites:
 | **Roadmap Generation** | `tests/test_roadmap.py` | **8 / 8** | PASS | Three-tier procedural roadmap, basis tagging, time limits. |
 | **Legal Forum Routing** | `tests/test_routing.py` | **15 / 15** | PASS | Category routing, headcount-based ICC/LCC rules, clarification questions. |
 | **Pipeline Integration** | `tests/test_pipeline.py` | **9 / 9** | PASS | Stateless orchestration, follow-up joins, statute bypass, privacy logging. |
-| **Answer Verification** | `tests/test_generate.py` | **8 / 8** | PASS | Core citation validation, section checking, advice & leakage rejection. |
-| **Golden Regression** | `tests/run_golden.py` | **31 / 33** | PASS | 31 passed, 2 known off-topic leaks (`bank account`, `pan card`). |
+| **Answer Verification** | `tests/test_generate.py` | **13 / 13** | PASS | Core citation validation, section checking, advice & leakage rejection. |
+| **Golden Regression** | `tests/run_golden.py` | **31 / 33 (2 known failures: bank account, pan card)** | 2 known | 31 passed, 2 known off-topic leaks (`bank account`, `pan card`). |
 | **Smoke Demo (End-to-End)**| `tests/smoke_demo.py` | **8 / 8** | PASS | Live Ollama evaluation table, follow-up resolution, draft generation. |
 
 Run all unit tests:
