@@ -101,6 +101,27 @@ To run with local LLM answer generation:
 python demo.py --llm
 ```
 
+### 5. FastAPI Web Service (API)
+Start the production FastAPI application:
+```bash
+uvicorn api:app --port 8000
+```
+Access interactive Swagger UI documentation at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+
+#### Endpoint Overview
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/health` | Health status, indexed KB counts, Ollama connectivity, translation status |
+| `GET` | `/api/examples` | Curated sample queries across English and Hindi with system disclaimer |
+| `POST` | `/api/ask` | Primary conversational legal query endpoint with routing and roadmaps |
+| `POST` | `/api/draft` | Deterministic formal complaint drafting with entity extraction |
+| `DELETE` | `/api/session/{session_id}` | Clears active in-memory conversation session history |
+
+#### Environment Variables
+- `ALLOWED_ORIGINS`: Comma-separated CORS origins (default: `"http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"`).
+- `WARM_OLLAMA`: Pre-warms Ollama model in background daemon thread on startup (default: `"1"`). Set to `"0"` to disable.
+- `ANSWER_TRANSLATION`: Opt-in experimental translation of answers into Hindi/Hinglish (default: `"off"`). Set to `"on"`, `"1"`, or `"true"` to enable.
+
 ---
 
 ## 🧪 Evaluation & Test Results
@@ -115,6 +136,7 @@ The project is verified by automated test suites:
 | **Legal Forum Routing** | `tests/test_routing.py` | **15 / 15** | PASS | Category routing, headcount-based ICC/LCC rules, clarification questions. |
 | **Pipeline Integration** | `tests/test_pipeline.py` | **9 / 9** | PASS | Stateless orchestration, follow-up joins, statute bypass, privacy logging. |
 | **Answer Verification** | `tests/test_generate.py` | **13 / 13** | PASS | Core citation validation, section checking, advice & leakage rejection. |
+| **FastAPI Layer** | `tests/test_api.py` | **13 / 13** | PASS | Endpoints, session TTL, CORS, privacy logging, 503 semaphore, OpenAPI. |
 | **Golden Regression** | `tests/run_golden.py` | **31 / 33 (2 known failures: bank account, pan card)** | 2 known | 31 passed, 2 known off-topic leaks (`bank account`, `pan card`). |
 | **Smoke Demo (End-to-End)**| `tests/smoke_demo.py` | **8 / 8** | PASS | Live Ollama evaluation table, follow-up resolution, draft generation. |
 
@@ -126,6 +148,7 @@ python tests/test_roadmap.py
 python tests/test_routing.py
 python tests/test_pipeline.py
 python tests/test_generate.py
+python tests/test_api.py
 python tests/run_golden.py
 ```
 

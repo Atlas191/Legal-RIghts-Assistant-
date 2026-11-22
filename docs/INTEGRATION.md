@@ -252,49 +252,127 @@ result = pipe.ask(
 
 ---
 
-## 4. FastAPI Example
+## 4. FastAPI API Layer (`api.py`)
 
-Always use a **plain `def`** endpoint (not `async def`). `LegalPipeline.ask()` executes
-CPU-bound search (embeddings, BM25) and blocking HTTP calls to Ollama. A plain `def` endpoint
-runs in FastAPI's external threadpool, preventing blocking of the async event loop.
-
-```python
-from typing import Literal
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from schemas import Turn, AskResult, DraftRequest, DraftResult
-from pipeline import get_pipeline
-from draft import build_draft
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    get_pipeline()          # warm up on startup
-    yield
-
-app = FastAPI(lifespan=lifespan)
-
-class AskRequest(BaseModel):
-    query: str
-    history: list[Turn] = []
-    response_lang: Literal["auto", "en", "hi", "hinglish"] = "auto"
-
-@app.post("/api/ask", response_model=AskResult)
-def ask(req: AskRequest):
-    try:
-        return get_pipeline().ask(req.query, req.history or None, response_lang=req.response_lang)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-
-@app.post("/api/draft", response_model=DraftResult)
-def create_draft(req: DraftRequest):
-    try:
-        # Reuses the warmed-up search instance from the pipeline singleton
-        search_fn = get_pipeline().search
-        return build_draft(req, search=search_fn)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+A full production FastAPI layer is implemented in `api.py` (with request/response models in `api_schemas.py`).
+To run the server:
+```bash
+uvicorn api:app --host 127.0.0.1 --port 8000
 ```
+Interactive Swagger documentation is available at `http://127.0.0.1:8000/docs`.
+
+### Endpoint Overview
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/health` | Health status, indexed KB sections/chunks, Ollama reachability, translation setting |
+| `GET` | `/api/examples` | Curated sample queries with language codes and system disclaimer |
+| `POST` | `/api/ask` | Primary conversational endpoint for legal guidance, routing, and roadmaps |
+| `POST` | `/api/draft` | Deterministic legal petition and complaint letter drafting |
+| `DELETE` | `/api/session/{session_id}` | Clears conversation history for the given session ID |
+
+### Sample `POST /api/ask` Request
+```json
+{
+  "query": "my boss keeps touching me at work",
+  "session_id": null,
+  "history": null,
+  "response_lang": "auto"
+}
+```
+
+### Sample `POST /api/ask` Response
+```json
+{
+  "off_topic": false,
+  "answer": "Under Section 3(1) of the Sexual Harassment of Women at Workplace (Prevention, Prohibition and Redressal) Act, 2013 [S1], no woman shall be subjected to sexual harassment at any workplace. Physical contact and advances involving unwelcome and explicit sexual overtures constitute sexual harassment under Section 2(n) [S2].",
+  "verified": true,
+  "fallback": false,
+  "sources": [
+    {
+      "id": "posh_act:sec3",
+      "heading": "Section 3 — Prevention of sexual harassment",
+      "act": "Sexual Harassment of Women at Workplace Act, 2013",
+      "section": "Section 3",
+      "source_file": "posh_act_supplement.md",
+      "text": "(1) No woman shall be subjected to sexual harassment at any workplace...",
+      "formerly_ipc": ""
+    },
+    {
+      "id": "posh_act:sec2n",
+      "heading": "Section 2(n) — Definition of sexual harassment",
+      "act": "Sexual Harassment of Women at Workplace Act, 2013",
+      "section": "Section 2(n)",
+      "source_file": "posh_act_supplement.md",
+      "text": "Sexual harassment includes physical contact and advances...",
+      "formerly_ipc": ""
+    }
+  ],
+  "disclaimer": "This information is for guidance only and does not constitute formal legal advice. Laws and procedures may vary; consult a qualified advocate or your local Legal Services Authority for advice on your specific situation.",
+  "resolved_query": "my boss keeps touching me at work",
+  "cited_source_ids": ["posh_act:sec3", "posh_act:sec2n"],
+  "routing": [
+    {
+      "name": "Internal Complaints Committee (ICC)",
+      "why": "Every employer of a workplace employing 10 or more workers must constitute an ICC.",
+      "time_limit": "3 months from the incident date (extendable by 3 months)",
+      "kb_ref": "posh_handbook",
+      "category": "institutional"
+    },
+    {
+      "name": "Local Complaints Committee (LCC)",
+      "why": "Receive complaints from workplaces with fewer than 10 workers or if complaint is against the employer.",
+      "time_limit": "3 months from the incident date (extendable by 3 months)",
+      "kb_ref": "posh_handbook",
+      "category": "institutional"
+    }
+  ],
+  "needs_info": [
+    "How many people work at your workplace?"
+  ],
+  "roadmap": [
+    {
+      "step": 1,
+      "kind": "immediate",
+      "title": "Immediate Safety & Evidence",
+      "actions": [
+        {
+          "text": "Write down dates, times, witnesses, and details of each incident in a secure personal log",
+          "basis": "general_guidance",
+          "kb_ref": null,
+          "time_limit": null
+        }
+      ]
+    },
+    {
+      "step": 2,
+      "kind": "institutional",
+      "title": "Workplace Committee Redressal",
+      "actions": [
+        {
+          "text": "File a written complaint with the Internal Complaints Committee (ICC) or Local Complaints Committee (LCC)",
+          "basis": "kb",
+          "kb_ref": "posh_handbook:sec4",
+          "time_limit": "3 months"
+        }
+      ]
+    }
+  ],
+  "detected_lang": "en",
+  "response_lang": "en",
+  "answer_en": null,
+  "translation_verified": null,
+  "session_id": "c7a9e1b23f4a4b5c8d9e0f1a2b3c4d5e"
+}
+```
+
+### UI Implementation Rules
+1. **Follow-Up Questions (`needs_info`)**: When `needs_info` is non-empty, prompt the user with the clarification question(s). Send the user's answer in the subsequent `/api/ask` request with the same `session_id`. The pipeline resolves and joins the conversation turns automatically.
+2. **Non-Statutory Advice Labels (`general_guidance`)**: For any action in `roadmap` with `basis == "general_guidance"`, clearly label the item in the UI as practical non-statutory guidance (distinct from statutory requirements backed by `basis == "kb"`).
+3. **Draft Editor & `missing_fields`**: The draft editor must highlight all `missing_fields` and bracketed placeholders (`[Date of Letter]`, `[Your Address]`, etc.) so the user can easily review and supply remaining details before exporting.
+4. **Loading State**: Display an informative loading state or progress spinner during answer generation (LLM calls typically take 6 to 16 seconds).
+5. **Mandatory Disclaimer**: Always display `AskResult.disclaimer` visibly below generated answers and draft outputs.
+6. **Fallback Handling**: If `fallback == True` and `off_topic == False`, the LLM generation could not be verified; display the retrieved statutory sources (`sources`) directly to the user instead of the unverified answer text.
+7. **New Conversation**: When the user clicks "New Chat" or resets the session, call `DELETE /api/session/{session_id}` to purge the in-memory turns.
 
 ---
 
