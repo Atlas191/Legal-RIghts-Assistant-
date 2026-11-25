@@ -4,41 +4,66 @@ import {
   Bot,
   BookOpen,
   ShieldCheck,
-  Plus,
   UserRound,
-  ExternalLink,
   LoaderCircle,
-  Trash2,
+  RotateCcw,
+  MapPin,
+  ListChecks,
+  HelpCircle,
 } from "lucide-react";
-import { askLegalAssistant } from "../services/api";
+import {
+  askLegalAssistant,
+  deleteSession,
+  getExamples,
+} from "../services/api";
 
-const suggestions = [
-  "What are my rights if I face domestic violence?",
-  "What can I do if I experience harassment at work?",
-  "What is the Dowry Prohibition Act?",
-  "How can I get free legal aid in India?",
+const FALLBACK_EXAMPLES = [
+  {
+    label: "Domestic violence",
+    query: "What are my rights if I face domestic violence?",
+  },
+  {
+    label: "Harassment at work",
+    query: "My boss keeps touching me at work",
+  },
+  {
+    label: "Dowry demands",
+    query: "My husband's family keeps demanding more dowry",
+  },
+  {
+    label: "Free legal aid",
+    query: "I can't afford a lawyer",
+  },
 ];
-
-function getAnswer(data) {
-  if (typeof data?.answer === "string") return data.answer;
-  if (typeof data?.result?.answer === "string") return data.result.answer;
-  return "The server responded, but its answer format wasn't recognised. Please check the backend response schema.";
-}
-
-function getSources(data) {
-  if (Array.isArray(data?.sources)) return data.sources;
-  if (Array.isArray(data?.result?.sources)) return data.result.sources;
-  return [];
-}
 
 export default function LegalAssistant() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [sessionId, setSessionId] = useState(null);
+  const [needsInfo, setNeedsInfo] = useState([]);
+  const [examples, setExamples] = useState(FALLBACK_EXAMPLES);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
-  const [sessionId, setSessionId] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadExamples() {
+      try {
+        const data = await getExamples();
+        if (!cancelled && Array.isArray(data?.examples) && data.examples.length > 0) {
+          setExamples(data.examples);
+        }
+      } catch {
+        // Keep fallback examples when backend is offline on initial render
+      }
+    }
+    loadExamples();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -60,26 +85,31 @@ export default function LegalAssistant() {
     try {
       const data = await askLegalAssistant(question, sessionId);
 
-        if (data.session_id) {
+      if (data?.session_id) {
         setSessionId(data.session_id);
-        }
+      }
+
+      setNeedsInfo(Array.isArray(data?.needs_info) ? data.needs_info : []);
 
       setMessages((current) => [
         ...current,
         {
           role: "assistant",
-          content: getAnswer(data),
-          sources: getSources(data),
-          disclaimer: data?.disclaimer || "",
-          verified: data?.verified,
-          fallback: data?.fallback,
+          content: typeof data?.answer === "string" ? data.answer : "",
+          off_topic: Boolean(data?.off_topic),
+          fallback: Boolean(data?.fallback),
+          verified: Boolean(data?.verified),
+          sources: Array.isArray(data?.sources) ? data.sources : [],
+          routing: Array.isArray(data?.routing) ? data.routing : [],
+          roadmap: Array.isArray(data?.roadmap) ? data.roadmap : [],
+          disclaimer: typeof data?.disclaimer === "string" ? data.disclaimer : "",
         },
       ]);
     } catch (err) {
       setError(
-        err.message?.includes("Failed to fetch")
-          ? "Unable to connect to the legal assistant server. Please check that the backend is running."
-          : err.message || "Something went wrong. Please try again."
+        err instanceof Error && err.message
+          ? err.message
+          : "Something went wrong. Please try again."
       );
     } finally {
       setLoading(false);
@@ -87,11 +117,21 @@ export default function LegalAssistant() {
     }
   }
 
-  function clearChat() {
+  async function startNewConversation() {
+    const activeSessionId = sessionId;
     setMessages([]);
     setError("");
     setInput("");
     setSessionId(null);
+    setNeedsInfo([]);
+
+    if (activeSessionId) {
+      try {
+        await deleteSession(activeSessionId);
+      } catch {
+        // Local state is already cleared
+      }
+    }
   }
 
   return (
@@ -108,11 +148,11 @@ export default function LegalAssistant() {
 
         <button
           className="clear-chat-button"
-          onClick={clearChat}
-          disabled={messages.length === 0 || loading}
+          onClick={startNewConversation}
+          disabled={(messages.length === 0 && !sessionId && needsInfo.length === 0) || loading}
         >
-          <Trash2 size={15} />
-          Clear chat
+          <RotateCcw size={15} />
+          New conversation
         </button>
       </div>
 
@@ -145,23 +185,32 @@ export default function LegalAssistant() {
               <h2>How can I help you today?</h2>
               <p>
                 You can describe a situation or ask a question about your
-                rights. You don't need to share your name or identifying
+                rights. You don&apos;t need to share your name or identifying
                 details.
               </p>
 
               <div className="suggestion-heading">
-                <span>TRY ASKING</span>
+                <span>EXAMPLE QUESTIONS</span>
               </div>
 
               <div className="suggestion-grid">
-                {suggestions.map((suggestion) => (
+                {examples.map((example) => (
                   <button
-                    key={suggestion}
+                    key={`${example.label}-${example.query}`}
+                    type="button"
                     className="suggestion-card"
-                    onClick={() => sendMessage(suggestion)}
+                    onClick={() => {
+                      setInput(example.query);
+                      inputRef.current?.focus();
+                    }}
                     disabled={loading}
                   >
-                    <span>{suggestion}</span>
+                    <div>
+                      {example.label && (
+                        <small className="suggestion-label">{example.label}</small>
+                      )}
+                      <span>{example.query}</span>
+                    </div>
                     <ArrowUp size={16} />
                   </button>
                 ))}
@@ -187,11 +236,33 @@ export default function LegalAssistant() {
                       {message.role === "assistant" ? "HerRights" : "You"}
                     </span>
 
-                    <div className="message-bubble">
-                      {message.content}
-                    </div>
+                    {message.role === "user" && (
+                      <div className="message-bubble">{message.content}</div>
+                    )}
+
+                    {message.role === "assistant" && message.off_topic && (
+                      <div className="message-bubble refusal-bubble">
+                        {message.content}
+                      </div>
+                    )}
 
                     {message.role === "assistant" &&
+                      !message.off_topic &&
+                      message.fallback && (
+                        <div className="message-bubble fallback-notice">
+                          I could not write a verified explanation, so here are
+                          the legal sections I found.
+                        </div>
+                      )}
+
+                    {message.role === "assistant" &&
+                      !message.off_topic &&
+                      !message.fallback && (
+                        <div className="message-bubble">{message.content}</div>
+                      )}
+
+                    {message.role === "assistant" &&
+                      !message.off_topic &&
                       message.sources?.length > 0 && (
                         <div className="sources-panel">
                           <strong>
@@ -204,24 +275,108 @@ export default function LegalAssistant() {
                               className="source-item"
                               key={source.id || sourceIndex}
                             >
-                              <div>
-                                <b>{source.title || source.name || "Legal source"}</b>
-                                {source.section && <span>{source.section}</span>}
-                                {source.excerpt && <p>{source.excerpt}</p>}
+                              <div className="source-body">
+                                <b>{source.heading}</b>
+                                {source.act && (
+                                  <div className="source-subtitle">
+                                    {source.act}
+                                  </div>
+                                )}
+                                <div className="source-meta">
+                                  {source.section && (
+                                    <span className="source-label">
+                                      {source.section}
+                                    </span>
+                                  )}
+                                  {source.formerly_ipc && (
+                                    <span className="source-label">
+                                      {`Formerly IPC: ${source.formerly_ipc}`}
+                                    </span>
+                                  )}
+                                </div>
+                                {source.text && (
+                                  <details className="source-details">
+                                    <summary>Read section text</summary>
+                                    <p>{source.text}</p>
+                                  </details>
+                                )}
                               </div>
-
-                              {source.url && (
-                                <a
-                                  href={source.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  aria-label="Open legal source"
-                                >
-                                  <ExternalLink size={15} />
-                                </a>
-                              )}
                             </div>
                           ))}
+                        </div>
+                      )}
+
+                    {message.role === "assistant" &&
+                      !message.off_topic &&
+                      message.routing?.length > 0 && (
+                        <div className="sources-panel routing-panel">
+                          <strong>
+                            <MapPin size={15} />
+                            Where to go
+                          </strong>
+
+                          <div className="routing-grid">
+                            {message.routing.map((forum, forumIndex) => (
+                              <div
+                                className="routing-card"
+                                key={`${forum.kb_ref}-${forum.name}-${forumIndex}`}
+                              >
+                                <b>{forum.name}</b>
+                                <p>{forum.why}</p>
+                                {forum.time_limit && (
+                                  <span className="time-limit-badge">
+                                    {`Time limit: ${forum.time_limit}`}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                    {message.role === "assistant" &&
+                      !message.off_topic &&
+                      message.roadmap?.length > 0 && (
+                        <div className="sources-panel roadmap-panel">
+                          <strong>
+                            <ListChecks size={15} />
+                            Step-by-step roadmap
+                          </strong>
+
+                          <div className="roadmap-steps">
+                            {message.roadmap.map((stepObj) => (
+                              <div
+                                className="roadmap-step"
+                                key={`${stepObj.step}-${stepObj.title}`}
+                              >
+                                <b>{`${stepObj.step}. ${stepObj.title}`}</b>
+                                {Array.isArray(stepObj.actions) &&
+                                  stepObj.actions.length > 0 && (
+                                    <ul className="roadmap-actions">
+                                      {stepObj.actions.map(
+                                        (action, actionIndex) => (
+                                          <li key={actionIndex}>
+                                            <span>{action.text}</span>
+                                            {action.time_limit && (
+                                              <span className="time-limit-badge">
+                                                {`Time limit: ${action.time_limit}`}
+                                              </span>
+                                            )}
+                                            {action.basis ===
+                                              "general_guidance" && (
+                                              <span className="guidance-badge">
+                                                General guidance, not a legal
+                                                requirement
+                                              </span>
+                                            )}
+                                          </li>
+                                        )
+                                      )}
+                                    </ul>
+                                  )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
 
@@ -243,7 +398,7 @@ export default function LegalAssistant() {
                     <span className="message-author">HerRights</span>
                     <div className="typing-indicator">
                       <LoaderCircle size={16} className="spin-icon" />
-                      Looking into your question...
+                      Thinking... this can take up to 20 seconds
                     </div>
                   </div>
                 </div>
@@ -260,6 +415,20 @@ export default function LegalAssistant() {
           )}
         </div>
 
+        {needsInfo.length > 0 && (
+          <div className="needs-info-banner" role="status">
+            <div className="needs-info-title">
+              <HelpCircle size={15} />
+              <strong>Follow-up question to narrow down your options</strong>
+            </div>
+            <ul>
+              {needsInfo.map((question, idx) => (
+                <li key={idx}>{question}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <form
           className="chat-input-area"
           onSubmit={(event) => {
@@ -271,6 +440,7 @@ export default function LegalAssistant() {
             <textarea
               ref={inputRef}
               value={input}
+              maxLength={1000}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
@@ -296,7 +466,7 @@ export default function LegalAssistant() {
 
           <div className="input-footer">
             <span>Press Enter to send · Shift + Enter for a new line</span>
-            <span>{input.length}/2000</span>
+            <span>{input.length}/1000</span>
           </div>
         </form>
       </div>

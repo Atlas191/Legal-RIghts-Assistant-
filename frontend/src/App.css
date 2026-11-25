@@ -2266,3 +2266,164 @@
     padding: 18px;
   }
 }
+
+/* Additional assistant structured panels */
+
+.suggestion-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--purple);
+  margin-bottom: 4px;
+}
+
+.fallback-notice,
+.refusal-bubble {
+  border: 1px solid #e7dcef;
+  background: #faf6fc;
+}
+
+.source-body {
+  width: 100%;
+}
+
+.source-subtitle {
+  color: var(--text-muted);
+  font-size: 10px;
+  margin-top: 2px;
+}
+
+.source-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.source-item span.source-label {
+  display: inline-block;
+  margin: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--purple-light);
+  color: var(--purple);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.source-details {
+  margin-top: 8px;
+}
+
+.source-details summary {
+  cursor: pointer;
+  color: var(--purple);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.routing-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.routing-card {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.routing-card b {
+  display: block;
+  font-size: 11px;
+  color: var(--plum);
+}
+
+.routing-card p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.time-limit-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #fff1e4;
+  color: #9e581e;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.roadmap-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.roadmap-step {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.roadmap-step b {
+  display: block;
+  font-size: 11px;
+  color: var(--plum);
+  margin-bottom: 6px;
+}
+
+.roadmap-actions {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.roadmap-actions li {
+  display: list-item;
+}
+
+.guidance-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #f0eafa;
+  color: #6b4999;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.needs-info-banner {
+  margin: 0 22px 10px;
+  padding: 11px 14px;
+  border: 1px solid #e1cceb;
+  border-radius: 9px;
+  background: #f7effb;
+  color: var(--plum);
+  font-size: 11px;
+}
+
+.needs-info-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+  font-size: 11px;
+}
+
+.needs-info-banner ul {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.6;
+}
+

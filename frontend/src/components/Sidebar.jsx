@@ -7,7 +7,6 @@ import {
   FolderOpen,
   Info,
   Scale,
-  Menu,
   X,
 } from "lucide-react";
 

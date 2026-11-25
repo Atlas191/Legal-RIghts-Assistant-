@@ -6,7 +6,6 @@ import {
   MessageCircle,
   FileText,
   BookOpen,
-  Users,
   Target,
   Lightbulb,
   Code2,
