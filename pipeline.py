@@ -10,6 +10,7 @@ from retrieval import load_search, retrieve
 from generate import answer as generate_answer
 from routing import route
 from roadmap import build_roadmap
+import statute_guard
 from lang import (
     detect_language,
     translate_to_english,
@@ -69,6 +70,27 @@ class LegalPipeline:
             raise ValueError("Query must not be empty.")
         if len(q) > 1000:
             raise ValueError("Query must not exceed 1000 characters.")
+
+        # --- Statute-number guard ---
+        guard_msg = statute_guard.check(q)
+        if guard_msg is not None:
+            return AskResult(
+                off_topic=True,
+                answer=guard_msg,
+                verified=False,
+                fallback=True,
+                sources=[],
+                cited_source_ids=[],
+                routing=[],
+                needs_info=[],
+                roadmap=[],
+                disclaimer=DISCLAIMER,
+                resolved_query=q,
+                detected_lang="en",
+                response_lang="en",
+                answer_en=None,
+                translation_verified=None,
+            )
 
         # --- Language detection ---
         detected_lang = detect_language(q)
