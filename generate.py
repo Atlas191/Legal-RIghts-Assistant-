@@ -49,6 +49,12 @@ ADVICE_PHRASES = [
     "helpline",
 ]
 
+ADVICE_VARIANT_PATTERNS = [
+    r"consult (?:with )?(?:a |an |your )?(?:lawyer|attorney|advocate|legal (?:expert|professional|advisor|adviser))",
+    r"(?:seek|get) (?:legal )?(?:advice|counsel|guidance) from",
+    r"or other (?:expert|professional)",
+]
+
 
 def build_context(results):
     """Build context string as numbered sources.
@@ -151,6 +157,24 @@ def verify_answer(answer_text, n_sources, source_texts, query=""):
     for phrase in ADVICE_PHRASES:
         if phrase in answer_lower and phrase not in all_sources_lower:
             return False, f"Contains advice not in the sources: '{phrase}'."
+
+    # 1a. Advice variants (case-insensitive) not appearing in any source text
+    for pat in ADVICE_VARIANT_PATTERNS:
+        for m in re.finditer(pat, answer_text, re.I):
+            matched = m.group(0)
+            if matched.lower() not in all_sources_lower:
+                return False, f"Contains advice not in the sources: '{matched}'."
+
+    # 1b. Bracketed notes: [Note ...], [NB ...], or [Disclaimer ...]
+    if re.search(r"\[\s*(?:note|nb|disclaimer)\b[^\]]*\]", answer_text, re.I):
+        return False, "Contains a bracketed note."
+
+    # 1c. Uncited paragraphs: ignore first paragraph and any paragraph under 120 chars
+    paragraphs = re.split(r"\r?\n\s*\r?\n", answer_text.strip())
+    for para in paragraphs[1:]:
+        p = para.strip()
+        if len(p) >= 120 and not re.search(r"\[S\d+\]", p):
+            return False, "Paragraph without a citation."
 
     # 2. Definition attribution: for each match of
     #    r"(?:defined?|defines|definition)\s+(?:in|under|by)\s+(?:the\s+)?Section\s+(\d+[A-Za-z]?)"
