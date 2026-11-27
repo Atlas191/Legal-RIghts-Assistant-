@@ -33,7 +33,10 @@ SYSTEM_PROMPT = (
     "11. Attribute each provision only to the source that contains it. Do not say a section defines or provides something unless that source says so.\n"
     "12. Sources marked ILLUSTRATIVE EXAMPLE describe other women. Never say or imply that their facts (people, places, objects, jobs) happened to the user. Use them only to explain how the law treats similar conduct.\n"
     "13. Do not tell the user to report to her supervisor, boss, HR, management or a lawyer, and do not write numbered steps. If a source names a committee or authority, you may name it.\n"
-    "14. If a source does not clearly apply to the user's situation, do not mention it."
+    "14. If a source does not clearly apply to the user's situation, do not mention it.\n"
+    "15. Do not write notes in square brackets.\n"
+    "16. Do not write a 'Next steps' list or heading; next steps are added by the application.\n"
+    "17. End every paragraph after the first with a citation like [S1]."
 )
 
 
@@ -225,6 +228,105 @@ def verify_answer(answer_text, n_sources, source_texts, query=""):
     return True, ""
 
 
+def _flatten_sources_lower(source_texts):
+    """Return lowercased combined text from source_texts (dicts or strings)."""
+    parts = []
+    for s in source_texts or []:
+        if isinstance(s, dict):
+            parts.append(f"{s.get('heading', '')}\n{s.get('text', '')}")
+        else:
+            parts.append(str(s))
+    return "\n".join(parts).lower()
+
+
+def _matches_ungrounded_advice(text, all_sources_lower):
+    """Return True if text matches a banned advice phrase or variant not in sources."""
+    text_lower = text.lower()
+    for phrase in ADVICE_PHRASES:
+        if phrase in text_lower and phrase not in all_sources_lower:
+            return True
+    for pat in ADVICE_VARIANT_PATTERNS:
+        for m in re.finditer(pat, text, re.I):
+            if m.group(0).lower() not in all_sources_lower:
+                return True
+    return False
+
+
+def sanitize_answer(answer_text, source_texts):
+    """Delete ungrounded notes, advice sentences, trailing Next steps blocks, and uncited body paragraphs.
+
+    Only deletes text; never adds or rewrites text. If the sanitized result has no [S#] citation
+    or is under 40 characters, returns the original answer_text unchanged.
+    """
+    if not answer_text or not answer_text.strip():
+        return answer_text
+
+    all_sources_lower = _flatten_sources_lower(source_texts)
+
+    # a) Remove bracketed notes: [Note ...], [NB ...], [Disclaimer ...]
+    cleaned = re.sub(r"(?im)^[ \t]*\[\s*(?:note|nb|disclaimer)\b[^\]]*\][ \t]*", "", answer_text)
+    cleaned = re.sub(r"(?i)[ \t]*\[\s*(?:note|nb|disclaimer)\b[^\]]*\]", "", cleaned)
+
+    # b) Remove sentences/bullet lines matching advice phrases or variants not in sources
+    lines = cleaned.split("\n")
+    kept_lines = []
+    for line in lines:
+        if not line.strip():
+            kept_lines.append(line)
+            continue
+        parts = re.split(r"((?<=[.!?])\s+)", line)
+        kept_sentences = []
+        kept_seps = []
+        for idx in range(0, len(parts), 2):
+            sent = parts[idx]
+            if _matches_ungrounded_advice(sent, all_sources_lower):
+                continue
+            if kept_sentences:
+                sep = parts[idx - 1] if idx - 1 >= 0 else " "
+                kept_seps.append(sep)
+            kept_sentences.append(sent)
+        if not kept_sentences:
+            continue
+        rebuilt = kept_sentences[0]
+        for s_idx in range(1, len(kept_sentences)):
+            rebuilt += kept_seps[s_idx - 1] + kept_sentences[s_idx]
+        kept_lines.append(rebuilt)
+    cleaned = "\n".join(kept_lines)
+
+    # c) Remove trailing "Next steps" / "What you can do" block if it has no [S#] citation
+    lines = cleaned.split("\n")
+    for idx, line in enumerate(lines):
+        if re.match(r"^\s*(?:Next [Ss]teps|What you can do)\b(?:\s*:|\s|$)", line, re.I):
+            trailing = lines[idx:]
+            if not any(re.search(r"\[S\d+\]", ln) for ln in trailing):
+                lines = lines[:idx]
+                break
+    cleaned = "\n".join(lines)
+
+    # d) Remove every paragraph after the first that has no [S#] citation
+    paragraphs = re.split(r"\r?\n\s*\r?\n", cleaned.strip())
+    if paragraphs and paragraphs[0].strip():
+        kept_paras = [paragraphs[0]]
+        for p in paragraphs[1:]:
+            if p.strip() and re.search(r"\[S\d+\]", p):
+                kept_paras.append(p)
+        cleaned = "\n\n".join(kept_paras)
+    else:
+        cleaned = ""
+
+    # e) Collapse repeated blank lines and strip
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+
+    if not re.search(r"\[S\d+\]", cleaned) or len(cleaned) < 40:
+        logger.info("Sanitizer kept original text unchanged (removed=False, chars=0).")
+        return answer_text
+
+    removed_chars = max(0, len(answer_text) - len(cleaned))
+    was_removed = removed_chars > 0 or cleaned != answer_text
+    logger.info("Sanitized answer: removed=%s chars=%d", was_removed, removed_chars)
+    return cleaned
+
+
 def _extract_citations(answer_text, results):
     """Extract list of parent IDs cited in answer_text."""
     c_indices = sorted(list(set(int(x) for x in re.findall(r"\[S(\d+)\]", answer_text))))
@@ -316,6 +418,7 @@ def answer(query, retrieval_result):
             "fallback": True,
         }
 
+    content = sanitize_answer(content, source_texts)
     ok, reason = verify_answer(content, n_sources, source_texts, query=query)
     if ok:
         citations = _extract_citations(content, results)
@@ -334,13 +437,16 @@ def answer(query, retrieval_result):
         f"Your previous response failed verification: {reason}\n"
         f"Allowed source IDs: {allowed_ids}.\n"
         "Reminder: Answer only using facts in the sources, put [S#] after each claim, "
-        "use only the allowed IDs, and never invent any Section numbers. Please regenerate."
+        "use only the allowed IDs, and never invent any Section numbers. "
+        "Do not add notes in brackets, do not suggest consulting a lawyer or expert, and do not write a Next steps list. "
+        "Please regenerate."
     )
     messages.append({"role": "assistant", "content": content})
     messages.append({"role": "user", "content": reminder})
 
     content2, elapsed2 = _call_ollama(messages)
     if content2 is not None:
+        content2 = sanitize_answer(content2, source_texts)
         ok2, reason2 = verify_answer(content2, n_sources, source_texts, query=query)
         if ok2:
             citations = _extract_citations(content2, results)

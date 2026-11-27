@@ -5,7 +5,7 @@ import sys
 # Ensure project root is on sys.path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from generate import build_context, verify_answer
+from generate import build_context, sanitize_answer, verify_answer
 
 TEST_CASES = [
     (
@@ -291,6 +291,143 @@ def test_photos_answer_fails():
     print(f"  [PASS] PHOTOS_ANSWER failed verification as expected ({reason})")
 
 
+def test_sanitize_photos_answer():
+    """PHOTOS_ANSWER passes sanitize_answer -> verify_answer(True) with junk removed."""
+    sources = [
+        "Section 66E — Information Technology Act, 2000: Whoever, intentionally or knowingly captures, publishes or transmits the image of a private area of any person without his or her consent, under circumstances violating the privacy of that person, shall be punished with imprisonment up to three years or fine up to two lakh rupees or both.",
+        "Section 77 — Bharatiya Nyaya Sanhita, 2023: Voyeurism — watching or capturing the image of a woman engaging in a private act in circumstances where she would usually have the expectation of not being observed.",
+        "Section 66E (Explanation) — Under circumstances violating privacy means circumstances in which a person can have a reasonable expectation that he or she could disrobe in privacy, without being concerned that an image of his or her private area was being captured.",
+    ]
+    sanitized = sanitize_answer(PHOTOS_ANSWER, sources)
+    assert "[Note" not in sanitized, f"Expected [Note removed, got:\n{sanitized}"
+    assert "consult" not in sanitized.lower(), f"Expected consult removed, got:\n{sanitized}"
+    assert "Next steps" not in sanitized, f"Expected Next steps removed, got:\n{sanitized}"
+    ok, reason = verify_answer(sanitized, 3, sources)
+    assert ok is True, f"Expected sanitized PHOTOS_ANSWER to pass verify_answer, got: {reason!r}"
+    print("  [PASS] sanitize_answer cleans PHOTOS_ANSWER and passes verify_answer")
+
+
+def test_sanitize_substep_a_bracketed_notes():
+    """Sub-step a removes [Note ...], [NB ...], [Disclaimer ...] while keeping cited content."""
+    sources = ["Section 85 — Cruelty by husband"]
+    raw = (
+        "Cruelty by a husband is punishable under Section 85 [S1]. [Note: Not legal advice.]\n\n"
+        "[NB: Check jurisdiction carefully.]\n\n"
+        "The court may impose imprisonment up to three years [S1]. [Disclaimer: Info only.]"
+    )
+    sanitized = sanitize_answer(raw, sources)
+    assert "[Note" not in sanitized and "[NB" not in sanitized and "[Disclaimer" not in sanitized
+    assert "Cruelty by a husband is punishable under Section 85 [S1]." in sanitized
+    assert "The court may impose imprisonment up to three years [S1]." in sanitized
+    print("  [PASS] sanitize sub-step a removes bracketed notes and keeps cited text")
+
+
+def test_sanitize_substep_b_advice_sentences():
+    """Sub-step b removes advice sentences/bullets not in sources and keeps valid/grounded sentences."""
+    sources = ["Section 85 — Cruelty by husband. You can seek legal advice from DLSA."]
+    raw = (
+        "Cruelty is punishable under Section 85 [S1]. You should consult with a lawyer immediately.\n\n"
+        "You can seek legal advice from DLSA for representation [S1].\n"
+        "* Report the matter to HR department right away."
+    )
+    sanitized = sanitize_answer(raw, sources)
+    assert "consult with a lawyer" not in sanitized
+    assert "HR department" not in sanitized
+    assert "Cruelty is punishable under Section 85 [S1]." in sanitized
+    assert "You can seek legal advice from DLSA for representation [S1]." in sanitized
+    print("  [PASS] sanitize sub-step b removes ungrounded advice sentences/bullets and keeps grounded ones")
+
+
+def test_sanitize_substep_c_next_steps_block():
+    """Sub-step c removes uncited trailing Next steps / What you can do block, keeps cited ones."""
+    sources = ["Section 85 — Cruelty by husband"]
+    raw = (
+        "Cruelty by a husband is punishable under Section 85 [S1].\n\n"
+        "Next steps:\n"
+        "* Keep a record of incidents.\n"
+        "* File a report soon."
+    )
+    sanitized = sanitize_answer(raw, sources)
+    assert "Next steps" not in sanitized
+    assert "Keep a record of incidents" not in sanitized
+    assert sanitized == "Cruelty by a husband is punishable under Section 85 [S1]."
+
+    raw_cited = (
+        "Cruelty by a husband is punishable under Section 85 [S1].\n\n"
+        "What you can do:\n"
+        "* File a complaint under Section 85 [S1]."
+    )
+    sanitized_cited = sanitize_answer(raw_cited, sources)
+    assert "What you can do:" in sanitized_cited
+    print("  [PASS] sanitize sub-step c removes uncited trailing Next steps block and keeps cited block")
+
+
+def test_sanitize_substep_d_uncited_paragraphs():
+    """Sub-step d keeps first paragraph and cited paragraphs, removes uncited paragraphs after first."""
+    sources = ["Section 85 — Cruelty by husband"]
+    raw = (
+        "Introductory paragraph without any citation marker.\n\n"
+        "This second paragraph has no citation marker at all and should be dropped.\n\n"
+        "This third paragraph explains Section 85 punishment with a valid citation [S1]."
+    )
+    sanitized = sanitize_answer(raw, sources)
+    assert "Introductory paragraph without any citation marker." in sanitized
+    assert "This second paragraph has no citation marker" not in sanitized
+    assert "This third paragraph explains Section 85 punishment with a valid citation [S1]." in sanitized
+    print("  [PASS] sanitize sub-step d keeps first and cited paragraphs, drops uncited non-first paragraphs")
+
+
+def test_sanitize_clean_answer_unchanged():
+    """A clean, cited answer comes back completely unchanged."""
+    sources = ["Section 85 — Cruelty by husband"]
+    clean = (
+        "If your husband subjects you to cruelty, he can face imprisonment under Section 85 [S1].\n\n"
+        "Cruelty includes wilful conduct likely to cause grave injury or harassment over unlawful demands [S1]."
+    )
+    assert sanitize_answer(clean, sources) == clean
+    print("  [PASS] sanitize_answer leaves a clean, cited answer unchanged")
+
+
+def test_sanitize_never_adds_text():
+    """Sanitized text only ever contains sentences that appeared in the input."""
+    import re
+    sources = ["Section 85 — Cruelty by husband"]
+    raw = (
+        "Introductory statement about rights.\n\n"
+        "Section 85 covers cruelty by husband or relatives [S1]. You should consult an attorney.\n\n"
+        "Uncited extra paragraph that will be removed.\n\n"
+        "[Note: Added bracketed remark.]"
+    )
+    sanitized = sanitize_answer(raw, sources)
+    input_sentences = {
+        s.strip()
+        for ln in raw.splitlines()
+        for s in re.split(r"(?<=[.!?])\s+", ln)
+        if s.strip()
+    }
+    output_sentences = [
+        s.strip()
+        for ln in sanitized.splitlines()
+        for s in re.split(r"(?<=[.!?])\s+", ln)
+        if s.strip()
+    ]
+    assert len(output_sentences) > 0
+    for sent in output_sentences:
+        assert sent in input_sentences, f"Sentence not found verbatim in input: {sent!r}"
+    print("  [PASS] sanitize_answer never adds or rewrites text")
+
+
+def test_sanitize_unusable_returns_original():
+    """An answer that sanitizes down to nothing usable is returned unchanged and fails verify_answer."""
+    sources = ["Section 85 — Cruelty by husband"]
+    raw = "[Note: This is a note.] You should consult with a lawyer for help."
+    sanitized = sanitize_answer(raw, sources)
+    assert sanitized == raw, f"Expected original text unchanged, got: {sanitized!r}"
+    ok, _ = verify_answer(sanitized, 1, sources)
+    assert ok is False, "Expected unusable original text to fail verify_answer"
+    print("  [PASS] unusable answer returns original unchanged and fails verify_answer")
+
+
 def run():
     passed = 0
     failed = 0
@@ -316,6 +453,14 @@ def run():
         test_bracketed_notes_check,
         test_uncited_paragraphs_check,
         test_photos_answer_fails,
+        test_sanitize_photos_answer,
+        test_sanitize_substep_a_bracketed_notes,
+        test_sanitize_substep_b_advice_sentences,
+        test_sanitize_substep_c_next_steps_block,
+        test_sanitize_substep_d_uncited_paragraphs,
+        test_sanitize_clean_answer_unchanged,
+        test_sanitize_never_adds_text,
+        test_sanitize_unusable_returns_original,
     ]
     for fn in extra_tests:
         try:
